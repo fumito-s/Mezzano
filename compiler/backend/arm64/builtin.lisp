@@ -149,6 +149,12 @@
 (defun invert-predicate (pred)
   (predicate-instruction-inverse (predicate-info pred)))
 
+(defun invert-branch (opcode)
+  (let ((inverse-pred (second (find opcode *predicate-instructions-1*
+                                    :key 'third))))
+    (predicate-instruction-jump-instruction
+     (predicate-info inverse-pred))))
+
 (defun reify-predicate (predicate result emitter)
   (let ((tmp (make-instance 'ir:virtual-register)))
     (funcall emitter (make-instance 'ir:constant-instruction

@@ -482,6 +482,7 @@ thread states & call-stacks."
                       (incf total-direct (profile-entry-direct-count s)))
                  ;; Print.
                  (format stream "~S:~%" thread)
+                 (format stream "direct~15Ttotal~30Tfunction~%")
                  (loop
                     for s across samples
                     do (format stream "  ~D ~D%~15T~D ~D%~30T~S~%"

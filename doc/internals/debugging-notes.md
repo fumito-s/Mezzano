@@ -1,4 +1,4 @@
-# Some random useful code snippets
+# Some random useful code snippets and notes on debugging tools
 
 ## To get a disassembly in the cross-environment:
 
@@ -75,3 +75,22 @@ The only high-level tool provided here is `trace-execution`. It takes a function
 and steps through it printing every instruction executed. This was originally developed
 for profiling CLOS dispatch. Unlike the statistical profiler, this gives an exact trace
 of instructions and functions executed.
+
+## Statistical Profiler
+
+Lives in the `mezzano.profiler` package.
+
+Simple operation:
+```lisp
+(mezzano.profiler:with-profiling (<options...>)
+  <forms-to-profile...>)
+```
+
+`:thread t` to sample just the current thread or `:thread nil` for all threads.
+`mezzano.supervisor::*profile-sample-during-gc*` to sample when the gc is running.
+
+Returns a profile object which can be passed to `mezzano.profiler:save-profile`.
+
+`(mezzano.profiler:save-profile "profile.txt" <profile> :verbosity :flame-graph)`
+
+Drop "profile.txt" in https://www.speedscope.app/ .

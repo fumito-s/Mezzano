@@ -98,6 +98,8 @@
          `(lap:movz ,dest ,value))
         ((<= 0 (lognot value) 65535)
          `(lap:movn ,dest ,(lognot value)))
+        ((lap:encodable-bit-mask-p value 64)
+         `(lap:orr ,dest :xzr ,value))
         (t
          `(lap:ldr ,dest ,(fetch-literal value)))))
 
@@ -547,23 +549,27 @@
                                         (t op)))))
     (emit (list* (arm64-instruction-opcode instruction) real-operands))))
 
+(defun emit-branch (backend-function instruction opcode true-target false-target)
+  (when (typep true-target 'ir:jump-instruction)
+    (setf true-target (ir:jump-target true-target)))
+  (when (typep false-target 'ir:jump-instruction)
+    (setf false-target (ir:jump-target false-target)))
+  (let ((next (ir:next-instruction backend-function instruction)))
+    (cond ((eql next true-target)
+           ;; Invert the opcode, jump to the false target, fall-through to
+           ;; the true target.
+           (emit (list (invert-branch opcode) (resolve-label false-target))))
+          (t
+           ;; Jump to the true target, maybe fall-through to the true target.
+           (emit (list opcode (resolve-label true-target)))
+           (when (not (eql next false-target))
+             (emit (list 'lap:b (resolve-label false-target))))))))
+
 (defmethod emit-lap (backend-function (instruction arm64-branch-instruction) uses defs)
-  (let ((real-operands (loop
-                         for op in (arm64-instruction-operands instruction)
-                         collect (cond ((and (consp op) (eql (first op) :literal/128))
-                                        (fetch-literal/128 (second op)))
-                                       ((and (consp op) (eql (first op) :literal))
-                                        (fetch-literal (second op)))
-                                       ((and (consp op) (eql (first op) :fp-32))
-                                        (lap::convert-width (second op) 32))
-                                       ((and (consp op) (eql (first op) :fp-64))
-                                        (lap::convert-width (second op) 64))
-                                       (t op)))))
-    (emit (append (list (arm64-instruction-opcode instruction))
-                  real-operands
-                  (list (resolve-label (arm64-branch-true-target instruction))))))
-  (emit (list 'lap:b
-              (resolve-label (arm64-branch-false-target instruction)))))
+  (emit-branch backend-function instruction
+               (arm64-instruction-opcode instruction)
+               (arm64-branch-true-target instruction)
+               (arm64-branch-false-target instruction)))
 
 (defmethod emit-lap (backend-function (instruction ir:constant-instruction) uses defs)
   (let ((value (ir:constant-value instruction))
@@ -617,9 +623,11 @@
        do (emit `(:d64/le (- ,(resolve-label target) ,jump-table))))))
 
 (defmethod emit-lap (backend-function (instruction ir:branch-instruction) uses defs)
-  (emit `(lap:subs :xzr ,(ir:branch-value instruction) :x26)
-        `(lap:b.ne ,(resolve-label (ir:branch-true-target instruction)))
-        `(lap:b ,(resolve-label (ir:branch-false-target instruction)))))
+  (emit `(lap:subs :xzr ,(ir:branch-value instruction) :x26))
+  (emit-branch backend-function instruction
+               'lap:b.ne
+               (ir:branch-true-target instruction)
+               (ir:branch-false-target instruction)))
 
 (defun call-argument-setup (call-arguments)
   (let* ((stack-args (nthcdr 5 call-arguments))

@@ -609,8 +609,8 @@
         (values nil :logical-immediate)))
     (make-instance 'arm64-instruction
                    :opcode opcode
-                   :operands `(,(decode-gp (ldb +rd+ word) :sf sf :sp t)
-                               ,(decode-gp (ldb +rn+ word) :sf sf :sp t)
+                   :operands `(,(decode-gp (ldb +rd+ word) :sf sf :sp (not (eql opcode 'a64:ands)))
+                               ,(decode-gp (ldb +rn+ word) :sf sf)
                                ,(decode-bit-masks (if (zerop sf) 32 64)
                                                   n imms immr)))))
 

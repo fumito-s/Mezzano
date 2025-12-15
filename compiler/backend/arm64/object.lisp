@@ -161,11 +161,25 @@
                        ,@body))
                     (t
                      (let ((,disp-reg (make-instance 'ir:virtual-register :kind :integer)))
-                       (emit (make-instance 'arm64-instruction
-                                            :opcode 'lap:ldr
-                                            :operands (list ,disp-reg `(:literal ,,disp))
-                                            :inputs (list)
-                                            :outputs (list ,disp-reg)))
+                       (cond
+                         ((<= 0 ,disp 65535)
+                          (emit (make-instance 'arm64-instruction
+                                               :opcode 'lap:movz
+                                               :operands (list ,disp-reg ,disp)
+                                               :inputs (list)
+                                               :outputs (list ,disp-reg))))
+                         ((<= 0 (lognot ,disp) 65535)
+                          (emit (make-instance 'arm64-instruction
+                                               :opcode 'lap:movn
+                                               :operands (list ,disp-reg (lognot ,disp))
+                                               :inputs (list)
+                                               :outputs (list ,disp-reg))))
+                         (t
+                          (emit (make-instance 'arm64-instruction
+                                               :opcode 'lap:ldr
+                                               :operands (list ,disp-reg `(:literal ,,disp))
+                                               :inputs (list)
+                                               :outputs (list ,disp-reg)))))
                        (let ((,effective-address (list ,object ,disp-reg))
                              (,additional-inputs (list ,object ,disp-reg)))
                          ,@body))))))
