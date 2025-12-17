@@ -9,6 +9,7 @@ The exact restrictions your code must follow, and the strength of them, are depe
 
 Interrupt handler restrictions:
 * No floating point. FPU registers are not saved/restored when an interrupt handler is invoked, so use of floating point may clobber interrupted state.
+* No more than 5 returned multiple values. Multiple values past 5 are stored in a special location that is not saved/restored by the interrupt handler.
 * No access to non-wired memory. Access to non-wired memory may cause a further interrupt as memory is paged in, or worse require that the page be read in from disk. This includes calling non-wired functions.
 * No allocation. Interrupt handlers may run during GC, which inhibits allocation. All allocation required by an interrupt handler must be performed ahead of time, not in the interrupt handler itself.
 * No standard error handling. Interrupt handlers must be correct, and any device-generated errors must be handled explictly.
