@@ -129,7 +129,7 @@
     (:ge  :lt lap:b.ge lap:csel.ge)
     (:lt  :ge lap:b.lt lap:csel.lt)
     (:gt  :le lap:b.gt lap:csel.gt)
-    (:le  :ge lap:b.le lap:csel.le)))
+    (:le  :gt lap:b.le lap:csel.le)))
 
 (defparameter *predicate-instructions*
   (let ((ht (make-hash-table :test 'eq :synchronized t)))
