@@ -978,18 +978,20 @@
     (emit `(lap:add :sp :x9 :xzr))))
 
 (defmethod emit-lap (backend-function (instruction ir:multiple-value-bind-instruction) uses defs)
+  ;; We can be a bit clever here. If there are zero values returned, then x0 is guaranteed to
+  ;; contain nil already (for the single value return convention), so we can skip that.
   (loop
-     with regs = '(:x0 :x1 :x2 :x3 :x4)
-     for i from 0
-     for value in (ir:multiple-value-bind-values instruction)
-     do
+    with regs = '(:x1 :x2 :x3 :x4) ; skip r0
+    for i from 1
+    for value in (rest (ir:multiple-value-bind-values instruction))
+    do
        (emit `(lap:subs :xzr :x5 ,(c::fixnum-to-raw i)))
        (cond (regs
               (let ((reg (pop regs)))
                 (emit `(lap:csel.le ,reg :x26 ,reg))))
              (t
               (emit `(lap:orr :x7 :xzr :x26))
-              (let ((over (gensym)))
+              (let ((over (mezzano.lap:make-label)))
                 (emit `(lap:b.le ,over))
                 (emit-object-load :x7 :x28
                                   :slot (+ mezzano.supervisor::+thread-mv-slots+
