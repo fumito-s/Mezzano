@@ -962,7 +962,7 @@
                            (label (dis:label context target)))
                       (when (and (member (inst-opcode instruction) '(a64:ldr))
                                  (not (logtest target #b111))
-                                 (<= 0 target (int::function-code-size (dis:context-function context))))
+                                 (<= 0 target (dis:code-end (dis:context-function context))))
                         ;; This is probably in the literal pool. TODO: Use the instruction & register
                         ;; to determine exactly what type to read
                         (let ((value (int::%object-ref-unsigned-byte-64-unscaled
