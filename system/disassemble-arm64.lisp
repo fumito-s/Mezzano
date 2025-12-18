@@ -317,28 +317,45 @@
 
 (defun logical-shifted-register (context word)
   (declare (ignore context))
-  (let ((sf (ldb (byte 1 31) word))
-        (shift (case (ldb (byte 2 22) word)
-                 (0 :lsl)
-                 (1 :lsr)
-                 (2 :asr)
-                 (3 nil)))
-        (imm6 (ldb (byte 6 10) word))
-        (opcode (aref (if (logbitp 21 word)
-                          #(a64:bic a64:orn a64:eon a64:bics)
-                          #(a64:and a64:orr a64:eor a64:ands))
-                      (ldb (byte 2 29) word))))
+  (let* ((sf (ldb (byte 1 31) word))
+         (shift (case (ldb (byte 2 22) word)
+                  (0 :lsl)
+                  (1 :lsr)
+                  (2 :asr)
+                  (3 nil)))
+         (imm6 (ldb (byte 6 10) word))
+         (opcode (aref (if (logbitp 21 word)
+                           #(a64:bic a64:orn a64:eon a64:bics)
+                           #(a64:and a64:orr a64:eor a64:ands))
+                       (ldb (byte 2 29) word)))
+         (rn (decode-gp (ldb +rn+ word) :sf sf))
+         (rm (decode-gp (ldb +rm+ word) :sf sf)))
     (when (and (zerop sf)
                (logbitp 5 imm6))
       (return-from logical-shifted-register
         (values nil :logical-shifted-register)))
-    (make-instance 'arm64-instruction
-                   :opcode opcode
-                   :operands (list* (decode-gp (ldb +rd+ word) :sf sf)
-                                    (decode-gp (ldb +rn+ word) :sf sf)
-                                    (decode-gp (ldb +rm+ word) :sf sf)
-                                    (unless (zerop imm6)
-                                      (list shift imm6))))))
+    (cond ((and (eql opcode 'a64:orr)
+                (member rn '(:xzr :wzr))
+                (zerop imm6))
+           (make-instance 'arm64-instruction
+                          :opcode 'a64:mov
+                          :operands (list (decode-gp (ldb +rd+ word) :sf sf)
+                                          rm)))
+          ((and (eql opcode 'a64:orr)
+                (member rm '(:xzr :wzr))
+                (zerop imm6))
+           (make-instance 'arm64-instruction
+                          :opcode 'a64:mov
+                          :operands (list (decode-gp (ldb +rd+ word) :sf sf)
+                                          rn)))
+          (t
+           (make-instance 'arm64-instruction
+                          :opcode opcode
+                          :operands (list* (decode-gp (ldb +rd+ word) :sf sf)
+                                           rn
+                                           rm
+                                           (unless (zerop imm6)
+                                             (list shift imm6))))))))
 
 (defun add/sub-shifted-register (context word)
   (declare (ignore context))
@@ -384,18 +401,25 @@
                    (4 :sxtb)
                    (5 :sxth)
                    (6 :sxtw)
-                   (7 :sxtx))))
+                   (7 :sxtx)))
+         (rm (decode-gp (ldb +rm+ word) :sf sf)))
     (when (or (not (eql opt 0))
               (not (eql (logand imm3 4) 0)))
       (return-from add/sub-extended-register
         (values nil :add/sub-extended-register)))
-    (make-instance 'arm64-instruction
-                   :opcode opcode
-                   :operands `(,(decode-gp (ldb +rd+ word) :sf sf :sp (member opcode '(a64:add a64:sub)))
-                               ,(decode-gp (ldb +rn+ word) :sf sf :sp t)
-                               ,(decode-gp (ldb +rm+ word) :sf sf)
-                               ,@(if (not (and (eql extend :lsl) (zerop imm3)))
-                                     (list extend imm3))))))
+    (if (and (eql opcode 'a64:add)
+             (member rm '(:xzr :wzr)))
+        (make-instance 'arm64-instruction
+                       :opcode 'a64:mov
+                       :operands `(,(decode-gp (ldb +rd+ word) :sf sf :sp (member opcode '(a64:add a64:sub)))
+                                   ,(decode-gp (ldb +rn+ word) :sf sf :sp t)))
+        (make-instance 'arm64-instruction
+                       :opcode opcode
+                       :operands `(,(decode-gp (ldb +rd+ word) :sf sf :sp (member opcode '(a64:add a64:sub)))
+                                   ,(decode-gp (ldb +rn+ word) :sf sf :sp t)
+                                   ,rm
+                                   ,@(if (not (and (eql extend :lsl) (zerop imm3)))
+                                         (list extend imm3)))))))
 
 (defun conditional-select (context word)
   (declare (ignore context))
@@ -584,35 +608,50 @@
                    (0 'a64:add)
                    (1 'a64:adds)
                    (2 'a64:sub)
-                   (3 'a64:subs))))
+                   (3 'a64:subs)))
+         (imm (ldb (byte 12 10) word)))
     (when (eql (logand shift 2) 2)
       (return-from add/sub-immediate
         (values nil :add/sub-immediate)))
-    (make-instance 'arm64-instruction
-                   :opcode opcode
-                   :operands `(,(decode-gp (ldb +rd+ word) :sf sf :sp (member opcode '(a64:add a64:sub)))
-                               ,(decode-gp (ldb +rn+ word) :sf sf :sp t)
-                               ,(ldb (byte 12 10) word)
-                               ,@(if (not (zerop shift))
-                                     (list :lsl 12))))))
+    (if (and (eql opcode 'a64:add)
+             (zerop imm))
+        (make-instance 'arm64-instruction
+                       :opcode 'a64:mov
+                       :operands `(,(decode-gp (ldb +rd+ word) :sf sf :sp (member opcode '(a64:add a64:sub)))
+                                   ,(decode-gp (ldb +rn+ word) :sf sf :sp t)))
+        (make-instance 'arm64-instruction
+                       :opcode opcode
+                       :operands `(,(decode-gp (ldb +rd+ word) :sf sf :sp (member opcode '(a64:add a64:sub)))
+                                   ,(decode-gp (ldb +rn+ word) :sf sf :sp t)
+                                   ,imm
+                                   ,@(if (not (zerop shift))
+                                         (list :lsl 12)))))))
 
 (defun logical-immediate (context word)
   (declare (ignore context))
-  (let ((sf (ldb (byte 1 31) word))
-        (n (ldb (byte 1 22) word))
-        (immr (ldb (byte 6 16) word))
-        (imms (ldb (byte 6 10) word))
-        (opcode (aref #(a64:and a64:orr a64:eor a64:ands)
-                      (ldb (byte 2 29) word))))
+  (let* ((sf (ldb (byte 1 31) word))
+         (n (ldb (byte 1 22) word))
+         (immr (ldb (byte 6 16) word))
+         (imms (ldb (byte 6 10) word))
+         (opcode (aref #(a64:and a64:orr a64:eor a64:ands)
+                       (ldb (byte 2 29) word)))
+         (rn (decode-gp (ldb +rn+ word) :sf sf))
+         (imm (decode-bit-masks (if (zerop sf) 32 64)
+                                n imms immr)))
     (when (and (eql sf 0) (eql n 1))
       (return-from logical-immediate
         (values nil :logical-immediate)))
-    (make-instance 'arm64-instruction
-                   :opcode opcode
-                   :operands `(,(decode-gp (ldb +rd+ word) :sf sf :sp (not (eql opcode 'a64:ands)))
-                               ,(decode-gp (ldb +rn+ word) :sf sf)
-                               ,(decode-bit-masks (if (zerop sf) 32 64)
-                                                  n imms immr)))))
+    (if (and (eql opcode 'orr)
+               (member rn '(:xzr :wzr)))
+        (make-instance 'arm64-instruction
+                       :opcode 'a64:mov
+                       :operands `(,(decode-gp (ldb +rd+ word) :sf sf :sp (not (eql opcode 'a64:ands)))
+                                   ,imm))
+        (make-instance 'arm64-instruction
+                       :opcode opcode
+                       :operands `(,(decode-gp (ldb +rd+ word) :sf sf :sp (not (eql opcode 'a64:ands)))
+                                   ,rn
+                                   ,imm)))))
 
 (defun move-wide-immediate (context word)
   (declare (ignore context))
