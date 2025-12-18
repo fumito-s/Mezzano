@@ -26,7 +26,7 @@
   :x5)
 
 (defmethod ra:valid-physical-registers-for-kind ((kind (eql :value)) (architecture c:arm64-target))
-  '(:x0 :x1 :x2 :x3 :x4 :x6 :x7))
+  '(:x0 :x1 :x2 :x3 :x4 :x6 :x7 :x13 :x14))
 
 (defmethod ra:valid-physical-registers-for-kind ((kind (eql :integer)) (architecture c:arm64-target))
   ;; x12 not used here. Reserved for memory indexes.
@@ -53,7 +53,7 @@
 
 (defmethod ra:instruction-clobbers ((instruction ir::base-call-instruction) (architecture c:arm64-target))
   '(:x0 :x1 :x2 :x3 :x4 :x5 :x6 :x7
-    :x8 :x9 :x10 :x11 :x12 :x13 :x14 :x15
+    :x8 :x9 :x10 :x11 :x12 :x15
     :x16 :x17 :x18 :x19 :x20 :x21 :x22 :x23
     :x24 :x25
     :q0 :q1 :q2 :q3 :q4 :q5 :q6 :q7
@@ -63,7 +63,7 @@
 
 (defmethod ra:instruction-clobbers ((instruction ir:argument-setup-instruction) (architecture c:arm64-target))
   '(:x0 :x1 :x2 :x3 :x4 :x5 :x6 :x7
-    :x8 :x9 :x10 :x11 :x12 :x13 :x14 :x15
+    :x8 :x9 :x10 :x11 :x12 :x15
     :x16 :x17 :x18 :x19 :x20 :x21 :x22 :x23
     :x24 :x25
     :q0 :q1 :q2 :q3 :q4 :q5 :q6 :q7
@@ -73,7 +73,7 @@
 
 (defmethod ra:instruction-clobbers ((instruction ir:save-multiple-instruction) (architecture c:arm64-target))
   '(:x0 :x1 :x2 :x3 :x4 :x5 :x6 :x7
-    :x8 :x9 :x10 :x11 :x12 :x13 :x14 :x15
+    :x8 :x9 :x10 :x11 :x12 :x15
     :x16 :x17 :x18 :x19 :x20 :x21 :x22 :x23
     :x24 :x25
     :q0 :q1 :q2 :q3 :q4 :q5 :q6 :q7
@@ -83,7 +83,7 @@
 
 (defmethod ra:instruction-clobbers ((instruction ir:restore-multiple-instruction) (architecture c:arm64-target))
   '(:x0 :x1 :x2 :x3 :x4 :x5 :x6 :x7
-    :x8 :x9 :x10 :x11 :x12 :x13 :x14 :x15
+    :x8 :x9 :x10 :x11 :x12 :x15
     :x16 :x17 :x18 :x19 :x20 :x21 :x22 :x23
     :x24 :x25
     :q0 :q1 :q2 :q3 :q4 :q5 :q6 :q7
@@ -116,7 +116,7 @@
 
 (defmethod ra:instruction-clobbers ((instruction ir:values-instruction) (architecture c:arm64-target))
   '(:x0 :x1 :x2 :x3 :x4 :x5 :x6 :x7
-    :x8 :x9 :x10 :x11 :x12 :x13 :x14 :x15
+    :x8 :x9 :x10 :x11 :x12 :x15
     :x16 :x17 :x18 :x19 :x20 :x21 :x22 :x23
     :x24 :x25
     :q0 :q1 :q2 :q3 :q4 :q5 :q6 :q7
@@ -126,7 +126,7 @@
 
 (defmethod ra:instruction-clobbers ((instruction ir:multiple-value-bind-instruction) (architecture c:arm64-target))
   '(:x0 :x1 :x2 :x3 :x4 :x5 :x6 :x7
-    :x8 :x9 :x10 :x11 :x12 :x13 :x14 :x15
+    :x8 :x9 :x10 :x11 :x12 :x15
     :x16 :x17 :x18 :x19 :x20 :x21 :x22 :x23
     :x24 :x25
     :q0 :q1 :q2 :q3 :q4 :q5 :q6 :q7
@@ -151,7 +151,7 @@
 
 (defmethod ra:instruction-clobbers ((instruction ir:disestablish-unwind-protect-instruction) (architecture c:arm64-target))
   '(:x0 :x1 :x2 :x3 :x4 :x5 :x6 :x7
-    :x8 :x9 :x10 :x11 :x12 :x13 :x14 :x15
+    :x8 :x9 :x10 :x11 :x12 :x15
     :x16 :x17 :x18 :x19 :x20 :x21 :x22 :x23
     :x24 :x25
     :q0 :q1 :q2 :q3 :q4 :q5 :q6 :q7

@@ -8,6 +8,7 @@
 (defvar *saved-multiple-values*)
 (defvar *dx-root-visibility*)
 (defvar *current-frame-layout*)
+(defvar *callee-save-loc*)
 (defvar *prepass-data*)
 (defvar *labels*)
 (defvar *literals*)
@@ -125,16 +126,16 @@
   "Convert a control stack slot number to an offset."
   (- (* (1+ slot) 8)))
 
-(defun code-for-reg-immediate-mem-op (inst reg base offset &optional temp)
+(defun code-for-reg-immediate-mem-op (inst reg base offset &optional temp reg2)
   (when (not temp)
     (setf temp :x12))
   (cond ((or (<= -256 offset 255)
              (and (<= 0 offset 16380)
                   (zerop (logand offset #b111))))
-         (list `(,inst ,reg (,base ,offset))))
+         (list `(,inst ,reg ,@(when reg2 (list reg2)) (,base ,offset))))
         (t
          (append (list (code-for-load-literal temp offset))
-                 (list `(,inst ,reg (,base ,temp)))))))
+                 (list `(,inst ,reg ,@(when reg2 (list reg2)) (,base ,temp)))))))
 
 (defun object-slot-displacement (slot &optional scale)
   (+ (- sys.int::+tag-object+) 8 (* slot (or scale 8))))
@@ -170,13 +171,20 @@
             (*dx-root-visibility* (make-hash-table :test 'eq))
             (*prepass-data* (make-hash-table :test 'eq))
             (*current-frame-layout* nil)
-            (*labels* (make-hash-table :test 'eq)))
+            (*labels* (make-hash-table :test 'eq))
+            (uses-callee-save-regs '()))
         (ir:do-instructions (inst-or-label backend-function)
+          (when (member :x13 (ir:instruction-inputs inst-or-label))
+            (pushnew :x13 uses-callee-save-regs))
+          (when (member :x14 (ir:instruction-inputs inst-or-label))
+            (pushnew :x14 uses-callee-save-regs))
           (cond ((typep inst-or-label 'ir:label)
                  (setf (gethash inst-or-label *labels*) (mezzano.lap:make-label)))
                 (t
                  (lap-prepass backend-function inst-or-label uses defs))))
         (let ((*emitted-lap* '())
+              (*callee-save-loc* (loop for reg in uses-callee-save-regs
+                                       collect (cons reg (allocate-stack-slots 1))))
               (*current-frame-layout* (coerce (loop
                                                  for elt across *stack-layout*
                                                  collect (if (not (eql elt :value))
@@ -206,8 +214,11 @@
             (loop
                for i from 0
                for elt across *current-frame-layout*
-               do (when (not (zerop elt))
-                    (emit-stack-store :x26 i))))
+               for (callee-save-reg) = (rassoc i *callee-save-loc*)
+               do (cond (callee-save-reg
+                         (emit-stack-store callee-save-reg i))
+                        ((not (zerop elt))
+                         (emit-stack-store :x26 i)))))
           (emit-gc-info :incoming-arguments :rcx)
           (ir:do-instructions (inst-or-label backend-function)
             (emit-debug-info (gethash inst-or-label debug-map '()) *spill-locations*)
@@ -253,8 +264,76 @@
 ;; na = ls
 
 (defmethod emit-lap (backend-function (instruction ir:argument-setup-instruction) uses defs)
+  (emit-argument-check backend-function instruction)
+  ;; Spill count.
+  (flet ((usedp (reg)
+           (or (typep reg 'mezzano.compiler.backend.register-allocator::physical-register)
+               (not (endp (gethash reg uses)))))
+         (store-arg (source reg-or-stack)
+           (if (typep reg-or-stack 'ir:virtual-register)
+               (emit-stack-store source (vreg-stack-slot reg-or-stack))
+               (emit `(lap:mov ,reg-or-stack ,source)))))
+    (when (usedp (ir:argument-setup-count instruction))
+      (store-arg :x5 (ir:argument-setup-count instruction)))
+    ;; Arguments are delivered in registers, and then on the caller's stack.
+    ;; Stack arguments are currently copied from the caller's stack into the
+    ;; callee's stack, however this could be avoided for required arguments
+    ;; via the incoming-arguments gc mechanism. This does not apply to optional
+    ;; arguments as they may or may not exist on the caller's stack.
+    (let ((register-args '(:x0 :x1 :x2 :x3 :x4))
+          (stack-argument-index 0))
+      ;; Stack &required args.
+      (loop
+         for req in (ir:argument-setup-required instruction)
+         do (cond (register-args
+                   (assert (eql req (pop register-args))))
+                  ((typep req 'ir:virtual-register)
+                   (when (usedp req)
+                     (emit `(lap:ldr :x7 (:x29 ,(* (+ stack-argument-index 2) 8))))
+                     (emit-stack-store :x7 (vreg-stack-slot req)))
+                   (incf stack-argument-index))
+                  (t
+                   (emit `(lap:ldr ,req (:x29 ,(* (+ stack-argument-index 2) 8))))
+                   (incf stack-argument-index))))
+      ;; &optional processing.
+      (loop
+         for i from (length (ir:argument-setup-required instruction))
+         for opt in (ir:argument-setup-optional instruction)
+         do
+           (when (usedp opt)
+             (emit `(lap:subs :xzr :x5 ,(ash i sys.int::+n-fixnum-bits+))))
+           (cond (register-args
+                  (assert (eql opt (pop register-args)))
+                  ;; Load into register.
+                  (emit `(lap:csel.le ,opt :x26 ,opt)))
+                 ;; Load from stack.
+                 ((typep opt 'ir:virtual-register)
+                  (when (usedp opt)
+                    (let ((over (gensym "OVER")))
+                      ;; Skip the load and store when not present, the stack slot will have been filled with NIL
+                      ;; during frame init.
+                      (emit `(lap:b.le ,over)
+                            `(lap:ldr :x7 (:x29 ,(* (+ stack-argument-index 2) 8))))
+                      (emit-stack-store :x7 (vreg-stack-slot opt))
+                      (emit over)))
+                  (incf stack-argument-index))
+                 (t
+                  (let ((over (gensym "OVER")))
+                    (emit `(lap:mov ,opt :x26))
+                    (emit `(lap:b.le ,over)
+                          `(lap:ldr ,opt (:x29 ,(* (+ stack-argument-index 2) 8))))
+                    (emit over))
+                  (incf stack-argument-index)))))
+    ;; &rest generation.
+    (when (and (ir:argument-setup-rest instruction)
+               (usedp (ir:argument-setup-rest instruction)))
+      ;; Only emit when used.
+      (emit-dx-rest-list instruction)
+      (store-arg :x7 (ir:argument-setup-rest instruction)))))
+
+(defun emit-argument-check (backend-function instruction)
   ;; Check the argument count.
-  (let ((args-ok (gensym)))
+  (let ((args-ok (mezzano.lap:make-label)))
     (flet ((emit-arg-error ()
              ;; If this is a closure, then it must have been invoked using
              ;; the closure calling convention and the closure object will
@@ -262,6 +341,8 @@
              ;; object and put that in RBX.
              (when (not (c:lambda-information-environment-arg (mezzano.compiler.backend::ast backend-function)))
                (emit `(lap:adr :x6 (+ (- entry-point 16) ,sys.int::+tag-object+))))
+             ;; NOTE: We don't restore callee save registers here because
+             ;; it's too soon for anything to have used them by this point.
              (emit `(lap:add :sp :x29 0)
                    `(lap:ldp :x29 :x30 (:post :sp 16))
                    `(:gc :no-frame :incoming-arguments :rcx :layout #*)
@@ -291,7 +372,7 @@
                                        (length (ir:argument-setup-required instruction))))
                    `(lap:subs :xzr :x9 ,(c::fixnum-to-raw
                                          (length (ir:argument-setup-optional instruction))))
-                  `(lap:b.ls ,args-ok))
+                   `(lap:b.ls ,args-ok))
              (emit-arg-error))
             ((ir:argument-setup-optional instruction)
              ;; Maximum number of arguments.
@@ -308,54 +389,7 @@
             ;; No arguments
             (t
              (emit `(lap:cbz :x5 ,args-ok))
-             (emit-arg-error)))))
-  ;; Spill count.
-  (flet ((usedp (reg)
-           (or (typep reg 'mezzano.compiler.backend.register-allocator::physical-register)
-               (not (endp (gethash reg uses))))))
-    (when (usedp (ir:argument-setup-count instruction))
-      (emit-stack-store :x5 (vreg-stack-slot (ir:argument-setup-count instruction))))
-    ;; Arguments are delivered in registers, and then on the caller's stack.
-    ;; Stack arguments are currently copied from the caller's stack into the
-    ;; callee's stack, however this could be avoided for required arguments
-    ;; via the incoming-arguments gc mechanism. This does not apply to optional
-    ;; arguments as they may or may not exist on the caller's stack.
-    (let ((stack-argument-index 0))
-      ;; Stack &required args.
-      (loop
-         for req in (ir:argument-setup-required instruction)
-         do (when (typep req 'ir:virtual-register)
-              (when (usedp req)
-                (emit `(lap:ldr :x7 (:x29 ,(* (+ stack-argument-index 2) 8))))
-                (emit-stack-store :x7 (vreg-stack-slot req)))
-              (incf stack-argument-index)))
-      ;; &optional processing.
-      (loop
-         for i from (length (ir:argument-setup-required instruction))
-         for opt in (ir:argument-setup-optional instruction)
-         do
-           (when (usedp opt)
-             (emit `(lap:subs :xzr :x5 ,(ash i sys.int::+n-fixnum-bits+))))
-           (cond ((typep opt 'ir:virtual-register)
-                  ;; Load from stack.
-                  (when (usedp opt)
-                    (let ((over (gensym "OVER")))
-                      ;; Skip the load and store when not present, the stack slot will have been filled with NIL
-                      ;; during frame init.
-                      (emit `(lap:b.le ,over)
-                            `(lap:ldr :x7 (:x29 ,(* (+ stack-argument-index 2) 8))))
-                      (emit-stack-store :x7 (vreg-stack-slot opt))
-                      (emit over)))
-                  (incf stack-argument-index))
-                 (t
-                  ;; Load into register.
-                  (emit `(lap:csel.le ,opt :x26 ,opt))))))
-    ;; &rest generation.
-    (when (and (ir:argument-setup-rest instruction)
-               (usedp (ir:argument-setup-rest instruction)))
-      ;; Only emit when used.
-      (emit-dx-rest-list instruction)
-      (emit-stack-store :x7 (vreg-stack-slot (ir:argument-setup-rest instruction))))))
+             (emit-arg-error))))))
 
 (defun emit-dx-rest-list (argument-setup)
   (let* ((regular-argument-count (+ (length (ir:argument-setup-required argument-setup))
@@ -469,6 +503,7 @@
       (ecase (lap::register-class rhs)
         ;; FIXME: This is wildly wrong and will cause the GC to lose live values.
         ;; Use a temporary or spill to the stack instead.
+        ;; FIXME: Fuckin' stop doing this!!!
         (:gpr-64
          (emit `(lap:eor ,lhs ,lhs ,rhs)
                `(lap:eor ,rhs ,rhs ,lhs)
@@ -587,6 +622,8 @@
 
 (defmethod emit-lap (backend-function (instruction ir:return-instruction) uses defs)
   (load-literal :x5 (c::fixnum-to-raw 1))
+  (loop for (reg . slot) in *callee-save-loc*
+        do (emit-stack-load reg slot))
   (emit `(lap:add :sp :x29 0)
         ;; Don't use emit-gc-info, using a custom layout.
         `(:gc :frame :multiple-values 0)
@@ -595,6 +632,8 @@
         `(lap:ret)))
 
 (defmethod emit-lap (backend-function (instruction ir:return-multiple-instruction) uses defs)
+  (loop for (reg . slot) in *callee-save-loc*
+        do (emit-stack-load reg slot))
   (emit `(lap:add :sp :x29 0)
         ;; Don't use emit-gc-info, using a custom layout.
         `(:gc :frame :multiple-values 0)
@@ -641,9 +680,12 @@
        for arg in stack-args
        for i from 0
        do
-         (emit-stack-load :x7 (vreg-stack-slot arg))
-         (emit `(lap:str :x7 (:sp ,(* i 8))))
-         (emit-gc-info :pushed-values (1+ i)))
+          (cond ((keywordp arg) ; physical register
+                 (emit `(lap:str ,arg (:sp ,(* i 8)))))
+                (t
+                 (emit-stack-load :x7 (vreg-stack-slot arg))
+                 (emit `(lap:str :x7 (:sp ,(* i 8))))))
+          (emit-gc-info :pushed-values (1+ i)))
     (load-literal :x5 (c::fixnum-to-raw n-args))))
 
 (defun call-argument-teardown (call-arguments)
@@ -667,6 +709,8 @@
 
 (defmethod emit-lap (backend-function (instruction ir:tail-call-instruction) uses defs)
   (call-argument-setup (ir:call-arguments instruction))
+  (loop for (reg . slot) in *callee-save-loc*
+        do (emit-stack-load reg slot))
   (cond ((<= (length (ir:call-arguments instruction)) 5)
          (emit `(lap:add :sp :x29 0)
                ;; Don't use emit-gc-info, using a custom layout.
@@ -686,6 +730,8 @@
 
 (defmethod emit-lap (backend-function (instruction ir:tail-funcall-instruction) uses defs)
   (call-argument-setup (ir:call-arguments instruction))
+  (loop for (reg . slot) in *callee-save-loc*
+        do (emit-stack-load reg slot))
   (emit-object-load :x9 :x6 :slot sys.int::+function-entry-point+)
   (cond ((<= (length (ir:call-arguments instruction)) 5)
          (emit `(lap:add :sp :x29 0)
@@ -989,7 +1035,7 @@
        (cond (regs
               (let ((reg (pop regs)))
                 (emit `(lap:csel.le ,reg :x26 ,reg))))
-             (t
+             ((typep value 'ir:virtual-register)
               (emit `(lap:orr :x7 :xzr :x26))
               (let ((over (mezzano.lap:make-label)))
                 (emit `(lap:b.le ,over))
@@ -997,7 +1043,15 @@
                                   :slot (+ mezzano.supervisor::+thread-mv-slots+
                                            (- i 5)))
                 (emit over)
-                (emit-stack-store :x7 (vreg-stack-slot value)))))))
+                (emit-stack-store :x7 (vreg-stack-slot value))))
+             (t
+              (emit `(lap:orr ,value :xzr :x26))
+              (let ((over (mezzano.lap:make-label)))
+                (emit `(lap:b.le ,over))
+                (emit-object-load value :x28
+                                  :slot (+ mezzano.supervisor::+thread-mv-slots+
+                                           (- i 5)))
+                (emit over))))))
 
 (defmethod emit-lap (backend-function (instruction ir:values-instruction) uses defs)
   (cond ((endp (ir:values-values instruction))
@@ -1009,8 +1063,11 @@
             for value in (nthcdr 5 (ir:values-values instruction))
             for i from 0
             do
-              (emit-stack-load :x7 (vreg-stack-slot value))
-              (emit-object-store :x7 :x28 :slot (+ mezzano.supervisor::+thread-mv-slots+ i))
+               (cond ((typep value 'ir:virtual-register)
+                      (emit-stack-load :x7 (vreg-stack-slot value))
+                      (emit-object-store :x7 :x28 :slot (+ mezzano.supervisor::+thread-mv-slots+ i)))
+                     (t
+                      (emit-object-store value :x28 :slot (+ mezzano.supervisor::+thread-mv-slots+ i))))
               (emit-gc-info :multiple-values 1)
               (emit `(lap:add :x5 :x5 ,(c::fixnum-to-raw 1)))
               (emit-gc-info :multiple-values 0)))))

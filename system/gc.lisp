@@ -481,6 +481,8 @@ This is required to make the GC interrupt safe."
       (scavengef (memref-signed-byte-64 interrupt-stack-pointer 4) cycle-kind) ; r11
       (scavengef (memref-signed-byte-64 interrupt-stack-pointer 3) cycle-kind) ; r12
       (scavengef (memref-signed-byte-64 interrupt-stack-pointer 2) cycle-kind) ; r13
+      (scavengef (memref-signed-byte-64 interrupt-stack-pointer 1) cycle-kind) ; r14
+      (scavengef (memref-signed-byte-64 interrupt-stack-pointer 0) cycle-kind) ; r15
       (scavengef (memref-signed-byte-64 interrupt-stack-pointer 10) cycle-kind) ; rbx
       #+x86-64
       (ecase extra-registers
@@ -686,6 +688,8 @@ This is required to make the GC interrupt safe."
   (scavengef (mezzano.supervisor:thread-state-r11-value thread) cycle-kind)
   (scavengef (mezzano.supervisor:thread-state-r12-value thread) cycle-kind)
   (scavengef (mezzano.supervisor:thread-state-r13-value thread) cycle-kind)
+  (scavengef (mezzano.supervisor:thread-state-r14-value thread) cycle-kind)
+  (scavengef (mezzano.supervisor:thread-state-r15-value thread) cycle-kind)
   (scavengef (mezzano.supervisor:thread-state-rbx-value thread) cycle-kind))
 
 (defun scavenge-full-save-thread (thread cycle-kind)
@@ -906,7 +910,11 @@ This is required to make the GC interrupt safe."
                        (frame-pointer (mezzano.supervisor:thread-frame-pointer object))
                        (return-address (memref-unsigned-byte-64 stack-pointer
                                                                 #-arm64 0
-                                                                #+arm64 1)))
+                                                                #+arm64 3)))
+                  #+arm64
+                  (scavengef (memref-t stack-pointer 0) cycle-kind) ; x13
+                  #+arm64
+                  (scavengef (memref-t stack-pointer 1) cycle-kind) ; x14
                   (scavenge-stack stack-pointer frame-pointer return-address cycle-kind))))))))
 
 (defun gc-info-for-function-offset (function offset)

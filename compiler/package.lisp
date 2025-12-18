@@ -441,7 +441,9 @@
            #:thread-allocation-time
            #:thread-bytes-consed
            #:thread-state-r15
+           #:thread-state-r15-value
            #:thread-state-r14
+           #:thread-state-r14-value
            #:thread-state-r13
            #:thread-state-r13-value
            #:thread-state-r12

@@ -152,6 +152,7 @@
   (mezzano.lap.arm64:orr :x5 :xzr :xzr)
   (mezzano.lap.arm64:orr :x0 :xzr :x26)
   ;; Return.
+  (mezzano.lap.arm64:ldp :x13 :x14 (:post :sp 16))
   (mezzano.lap.arm64:ldp :x29 :x30 (:post :sp 16))
   (mezzano.lap.arm64:ret))
 

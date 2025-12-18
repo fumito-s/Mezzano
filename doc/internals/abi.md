@@ -51,8 +51,8 @@ would be to use the full register set.
 | `x10` | `rdx`     | Temporary (integer)                          |
 | `x11` | `rsi`     | Temporary (integer)                          |
 | `x12` | `rdi`     | Temporary (integer)                          |
-| `x13` | `r14`     | Unused                                       |
-| `x14` | `r15`     | Unused                                       |
+| `x13` | `r14`     | Temporary, callee-save (value)               |
+| `x14` | `r15`     | Temporary, callee-save (value)               |
 | `x15` |           | Unused                                       |
 | `x16` |           | Unused                                       |
 | `x17` |           | Unused                                       |

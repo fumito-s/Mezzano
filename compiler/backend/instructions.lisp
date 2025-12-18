@@ -168,6 +168,9 @@
   (setf (swap-lhs instruction) (funcall substitution-function (swap-lhs instruction)))
   (setf (swap-rhs instruction) (funcall substitution-function (swap-rhs instruction))))
 
+(defmethod multiple-value-safe-p ((instruction swap-instruction) architecture)
+  t)
+
 (defmethod print-instruction ((instruction swap-instruction))
   (format t "   ~S~%"
           `(:swap ,(swap-lhs instruction)

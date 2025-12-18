@@ -68,6 +68,9 @@
   (:gc :no-frame :layout #*00)
   (mezzano.lap.arm64:add :x29 :sp :xzr)
   (:gc :frame)
+  ;; Save the callee-save registers too.
+  (mezzano.lap.arm64:stp :x13 :x14 (:pre :sp -16))
+  (:gc :frame :layout #*11)
   ;; Argument setup.
   (mezzano.lap.arm64:orr :x6 :xzr :x0) ; function
   (mezzano.lap.arm64:add :x0 :sp 0) ; sp
@@ -83,24 +86,29 @@
   ;; Call function, arguments were setup above.
   (mezzano.lap.arm64:ldr :x9 (:object :x6 0))
   (mezzano.lap.arm64:blr :x9)
-  (:gc :frame :multiple-values 0)
+  (:gc :frame :layout #*11 :multiple-values 0)
   ;; Switch back to the old stack.
   ;; Do not restore frame & stack pointer here, that would touch the old stack with
   ;; interrupts disabled.
   (mezzano.lap.arm64:msr :spsel 0)
   ;; Reenable interrupts, must not be done when on the wired stack.
   (mezzano.lap.arm64:msr :daifclr #b1111)
+  ;; Pop callee-save registers.
+  (mezzano.lap.arm64:ldp :x13 :x14 (:post :sp 16))
+  (:gc :frame :layout #* :multiple-values 0)
   ;; Now safe to restore the frame pointer.
   (mezzano.lap.arm64:ldp :x29 :x30 (:post :sp 16))
   (:gc :no-frame :layout #* :multiple-values 0)
   ;; Done, return.
   (mezzano.lap.arm64:ret)
   INTERRUPTS-DISABLED
-  (:gc :frame)
+  (:gc :frame :layout #*11)
   ;; Call function, arguments were setup above.
   (mezzano.lap.arm64:ldr :x9 (:object :x6 0))
   (mezzano.lap.arm64:blr :x9)
   ;; Restore frame and return.
+  (mezzano.lap.arm64:ldp :x13 :x14 (:post :sp 16))
+  (:gc :frame :layout #*)
   (mezzano.lap.arm64:ldp :x29 :x30 (:post :sp 16))
   (:gc :no-frame :layout #* :multiple-values 0)
   (mezzano.lap.arm64:ret))
