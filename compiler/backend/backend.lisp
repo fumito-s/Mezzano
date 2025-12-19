@@ -180,6 +180,17 @@
 (defgeneric perform-target-lowering-post-ssa (backend-function target))
 (defgeneric perform-target-lap-generation (backend-function debug-map spill-locations stack-layout target))
 
+(defun mark-nlx-involved-calls (backend-function)
+  ;; This could be more precise.
+  (let ((in-nlx-region nil))
+    (do-instructions (inst backend-function)
+      (when (typep inst 'begin-nlx-instruction)
+        (setf in-nlx-region t)
+        (return)))
+    (do-instructions (inst backend-function)
+      (when (typep inst 'base-call-instruction)
+        (setf (call-involved-in-nlx inst) in-nlx-region)))))
+
 (defun compile-backend-function-1 (backend-function target)
   (simplify-cfg backend-function)
   (break-critical-edges backend-function)
@@ -207,6 +218,7 @@
   (mezzano.compiler.backend.register-allocator::canonicalize-nlx-values backend-function target)
   (mezzano.compiler.backend.register-allocator::canonicalize-values backend-function target)
   (remove-unused-instructions backend-function)
+  (mark-nlx-involved-calls backend-function)
   (check-cfg backend-function))
 
 (defun compile-backend-function-2 (backend-function debug-map spill-locations stack-layout target)

@@ -257,3 +257,11 @@ Pseudo-instructions that do nothing except annotate the function's debug informa
 * `debug-unbind-variable-instruction` - Indicates that a lexical variable has been unbound and is no longer live.
 * `debug-update-variable-instruction` - Indicates that a lexical variable's value is now in another register.
     * Inputs the new value of the variable.
+
+## Future directions
+
+Only a few instructions produce more than one value. `label`, `argument-setup-instruction`,
+and `multiple-value-bind`. A higher-level pure-SSA IR might get away with wiggling things
+around so that all instructions produce a single "value", and values are referred to by
+pointing directly at their defining instruction. That'd allow virtual-register to be
+completely eliminated at that IR level, being fully implicit.

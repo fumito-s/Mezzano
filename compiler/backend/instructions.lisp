@@ -411,7 +411,10 @@
           `(:switch ,(switch-value instruction) ,(switch-targets instruction))))
 
 (defclass base-call-instruction (backend-instruction)
-  ())
+  ;; If an NLX occurs inside a call to the an NLX entry within this function, then
+  ;; callee-save registers won't get restored properly. Mark these call instructions
+  ;; so that the target can know that they clobber callee-save registers.
+  ((%involved-in-nlx :accessor call-involved-in-nlx)))
 
 (defclass call-instruction (base-call-instruction)
   ((%result :initarg :result :accessor call-result)
