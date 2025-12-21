@@ -4,11 +4,12 @@
   (:gc :no-frame :layout #*)
   (mezzano.lap.arm64:msr :spsel 0)
   (mezzano.lap.arm64:add :sp :x0 0)
-  (:gc :frame)
+  (:gc :frame :layout #*11)
   (mezzano.lap.arm64:orr :x29 :xzr :x1)
   (mezzano.lap.arm64:orr :x5 :xzr :xzr)
   (mezzano.lap.arm64:orr :x0 :x26 :xzr)
   (mezzano.lap.arm64:msr :daifclr #b1111)
+  (mezzano.lap.arm64:ldp :x13 :x14 (:post :sp 16))
   (:gc :no-frame :layout #*00)
   (mezzano.lap.arm64:ldp :x29 :x30 (:post :sp 16))
   (:gc :no-frame :layout #*)
@@ -227,7 +228,7 @@
 
 (defun stack-space-required-for-force-call-on-thread (thread)
   (declare (ignore thread))
-  (+ 16 ; Return address and more alignment
+  (+ 32 ; Return address, stuff, and callee save regs
      (* +thread-mv-slots-size+ 8) ; Saved MV area.
      512 ; FPU state
      (* 20 8)))
@@ -261,17 +262,24 @@
                                                    sys.int::+function-entry-point+))
       ;; Push frame pointer, keeping the stack aligned
       (decf sp 8)
-      (setf (sys.int::memref-unsigned-byte-64 sp) (+ sp (* 16 8)))
-      (setf (thread-state-rsp thread) sp
-            (thread-state-rbp thread) (+ sp (* 16 8))
-            (thread-full-save-p thread) nil))))
+      (let ((fp (+ sp (* 16 8))))
+        (setf (sys.int::memref-unsigned-byte-64 sp) fp)
+        (decf sp 8)
+        (setf (sys.int::memref-unsigned-byte-64 sp) 0) ; callee-1
+        (decf sp 8)
+        (setf (sys.int::memref-unsigned-byte-64 sp) 0) ; callee-2
+        (setf (thread-state-rsp thread) sp
+              (thread-state-rbp thread) fp
+              (thread-full-save-p thread) nil)))))
 
 (defun convert-thread-to-full-save (thread)
   (when (not (thread-full-save-p thread))
     ;; Pop saved fp & lr off the stack.
-    (let ((fp (sys.int::memref-unsigned-byte-64 (thread-state-rsp thread) 0))
-          (lr (sys.int::memref-unsigned-byte-64 (thread-state-rsp thread) 1)))
-      (incf (thread-state-rsp thread) 16)
+    (let ((x13 (sys.int::memref-t (thread-state-rsp thread) 0))
+          (x14 (sys.int::memref-t (thread-state-rsp thread) 1))
+          (fp (sys.int::memref-unsigned-byte-64 (thread-state-rsp thread) 2))
+          (lr (sys.int::memref-unsigned-byte-64 (thread-state-rsp thread) 3)))
+      (incf (thread-state-rsp thread) 32)
       ;; Make sure to flush the value registers
       ;; and also set up for a 0-value return.
       (setf (thread-state-rcx-value thread) 0
@@ -282,6 +290,8 @@
             (thread-state-r11-value thread) nil
             (thread-state-r12-value thread) nil
             (thread-state-r13-value thread) nil
+            (thread-state-r14-value thread) x13
+            (thread-state-r15-value thread) x14
             (thread-state-cs thread) lr ; lr
             (thread-state-rip thread) lr
             (thread-state-rbp thread) fp
@@ -292,9 +302,11 @@
 (defun force-call-on-thread (thread function &optional (argument nil argumentp))
   (convert-thread-to-partial-save thread)
   ;; Pop saved fp & lr off the stack.
-  (let ((fp (sys.int::memref-unsigned-byte-64 (thread-state-rsp thread) 0))
-        (lr (sys.int::memref-unsigned-byte-64 (thread-state-rsp thread) 1)))
-    (incf (thread-state-rsp thread) 16)
+  (let ((x13 (sys.int::memref-t (thread-state-rsp thread) 0))
+        (x14 (sys.int::memref-t (thread-state-rsp thread) 1))
+        (fp (sys.int::memref-unsigned-byte-64 (thread-state-rsp thread) 2))
+        (lr (sys.int::memref-unsigned-byte-64 (thread-state-rsp thread) 3)))
+    (incf (thread-state-rsp thread) 32)
     (setf (thread-state-rip thread) (sys.int::%object-ref-unsigned-byte-64
                                      function
                                      sys.int::+function-entry-point+)
@@ -306,6 +318,8 @@
           (thread-state-r11-value thread) nil
           (thread-state-r12-value thread) nil
           (thread-state-r13-value thread) nil
+          (thread-state-r14-value thread) x13
+          (thread-state-r15-value thread) x14
           (thread-state-ss thread) +initial-fpsr/fpcr+
           (thread-state-rflags thread) +initial-spsr+
           (thread-state-cs thread) lr
