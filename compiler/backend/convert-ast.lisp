@@ -890,6 +890,13 @@
   (emit (make-instance 'unreachable-instruction))
   nil)
 
+(define-primitive fixnump ((object) result-mode)
+  (let ((result (make-instance 'virtual-register)))
+    (emit (make-instance 'fixnump-instruction
+                         :value object
+                         :result result))
+    result))
+
 (defun cg-primitive (primitive form result-mode)
   (let ((arguments (loop
                       for arg in (ast-arguments form)
@@ -945,6 +952,16 @@
                                   :result result
                                   :function (cg-form (first (ast-arguments form)) :value)
                                   :environment (cg-form (second (ast-arguments form)) :value)))
+             result))
+          ((and (eql (ast-name form) 'sys.int::%value-has-tag-p)
+                (eql (length (ast-arguments form)) 2)
+                (typep (second (ast-arguments form)) 'ast-quote)
+                (typep (ast-value (second (ast-arguments form))) '(unsigned-byte 4)))
+           (let ((result (make-instance 'virtual-register)))
+             (emit (make-instance 'value-has-tag-p-instruction
+                                  :value (cg-form (first (ast-arguments form)) :value)
+                                  :tag (ast-value (second (ast-arguments form)))
+                                  :result result))
              result))
           ((and prim
                 (eql (length (primitive-lambda-list prim))

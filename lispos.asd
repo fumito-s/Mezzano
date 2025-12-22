@@ -43,6 +43,7 @@
                (:file "compiler/type-check")
                (:file "compiler/backend/backend")
                (:file "compiler/backend/instructions")
+               (:file "compiler/backend/extended-instructions")
                (:file "compiler/backend/cfg")
                (:file "compiler/backend/analysis")
                (:file "compiler/backend/dominance")

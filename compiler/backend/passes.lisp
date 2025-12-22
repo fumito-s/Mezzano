@@ -372,3 +372,134 @@ Must be performed after SSA conversion."
                                             new-constant)
                                            (t reg)))))))
       (remove-instruction backend-function inst))))
+
+(defparameter *enable-dominance-type-flow* t)
+
+(defgeneric dominance-aware-type-flow-update (function instruction info)
+  (:method (f i info) info))
+
+(defmethod dominance-aware-type-flow-update (function (instruction branch-instruction) info)
+  (loop with value = (branch-value instruction)
+        for (known-value data) in info
+        when (eql value known-value)
+          do (cond ((eql data :truthy)
+                    ;; Branch is true. Change to a jump to the true branch.
+                    (change-class instruction
+                                  'jump-instruction
+                                  :values '()
+                                  :target (branch-true-target instruction))
+                    (return))
+                   ((eql data :false)
+                    ;; Branch is false. Change to a jump to the false branch.
+                    (change-class instruction
+                                  'jump-instruction
+                                  :values '()
+                                  :target (branch-false-target instruction))
+                    (return))))
+  info)
+
+(defmethod dominance-aware-type-flow-update (function (instruction value-has-tag-p-instruction) info)
+  (loop with value = (predicate-value instruction)
+        with tag = (value-has-tag-p-tag instruction)
+        for (known-value data other-predicate) in info
+        when (and (eql value known-value)
+                  (member data '(:known-true-predicate :known-false-predicate))
+                  (typep other-predicate 'value-has-tag-p-instruction)
+                  (eql (value-has-tag-p-tag other-predicate) tag))
+          do
+             ;; Then this instruction is known to be true or false.
+             (cond ((eql data :known-true-predicate)
+                    (push (list (predicate-result instruction) :truthy) info)
+                    (change-class instruction
+                                  'constant-instruction
+                                  :value 't
+                                  :destination (predicate-result instruction)))
+                   (t ; false
+                    (push (list (predicate-result instruction) :falsey) info)
+                    (change-class instruction
+                                  'constant-instruction
+                                  :value 'nil
+                                  :destination (predicate-result instruction))))
+             (return))
+  info)
+
+(defmethod dominance-aware-type-flow-update (function (instruction fixnump-instruction) info)
+  (loop with value = (predicate-value instruction)
+        for (known-value data other-predicate) in info
+        when (and (eql value known-value)
+                  (member data '(:known-true-predicate :known-false-predicate))
+                  (typep other-predicate 'fixnump-instruction))
+          do
+             ;; Then this instruction is known to be true or false.
+             (cond ((eql data :known-true-predicate)
+                    (push (list (predicate-result instruction) :truthy) info)
+                    (change-class instruction
+                                  'constant-instruction
+                                  :value 't
+                                  :destination (predicate-result instruction)))
+                   (t ; false
+                    (push (list (predicate-result instruction) :falsey) info)
+                    (change-class instruction
+                                  'constant-instruction
+                                  :value 'nil
+                                  :destination (predicate-result instruction))))
+             (return))
+  info)
+
+(defun dominance-aware-type-flow (function)
+  (let ((dom (mezzano.compiler.backend.dominance:compute-dominance function)))
+    (multiple-value-bind (uses defs)
+        (build-use/def-maps function)
+      (declare (ignore uses))
+      (labels ((doit (bb info)
+                 #++(format t "Visit ~S ~:S~%" bb info)
+                 ;; Update instructions based on available information.
+                 (loop
+                   for inst = bb then (next-instruction function inst)
+                   do
+                      (setf info (dominance-aware-type-flow-update function inst info))
+                      (when (typep inst 'terminator-instruction)
+                        (return)))
+                 ;; Traverse the dominator tree, adding new information
+                 ;; whenever we reach a branch instruction.
+                 (let* ((children (mezzano.compiler.backend.dominance:dominator-tree-children
+                                   dom bb))
+                        (terminator (basic-block-terminator function bb)))
+                   #++(when (typep terminator 'branch-instruction)
+                     (format t " terminator is ~S ~S ~S ~:S~%" terminator
+                             (branch-true-target terminator)
+                             (branch-false-target terminator)
+                             children))
+                   (cond ((and (typep terminator 'branch-instruction)
+                               (not (eql (branch-true-target terminator)
+                                         (branch-false-target terminator)))
+                               (member (branch-true-target terminator) children)
+                               (member (branch-false-target terminator) children))
+                          (let* ((value (branch-value terminator))
+                                 ;; If the source of the value was a predicate value,
+                                 ;; we now know something about that.
+                                 (value-def (first (gethash value defs)))
+                                 (predicate-value (and (typep value-def 'predicate-instruction)
+                                                       (predicate-value value-def))))
+                            (dolist (child children)
+                              (doit child
+                                    (cond ((eql child (branch-true-target terminator))
+                                           `(,@(when predicate-value
+                                                 `((,predicate-value
+                                                    :known-true-predicate
+                                                    ,value-def)))
+                                             (,value :truthy)
+                                             ,@info))
+                                          ((eql child (branch-false-target terminator))
+                                           `(,@(when predicate-value
+                                                 `((,predicate-value
+                                                    :known-false-predicate
+                                                    ,value-def)))
+                                             (,value :falsey)
+                                             ,@info))
+                                          (t
+                                           info))))))
+                         (t
+                          (dolist (child children)
+                            (doit child info)))))))
+        (doit (first-instruction function) '())))))

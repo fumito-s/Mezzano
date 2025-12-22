@@ -186,6 +186,7 @@
     "compiler/type-check.lisp"
     "compiler/backend/backend.lisp"
     "compiler/backend/instructions.lisp"
+    "compiler/backend/extended-instructions.lisp"
     "compiler/backend/cfg.lisp"
     "compiler/backend/analysis.lisp"
     "compiler/backend/dominance.lisp"

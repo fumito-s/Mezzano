@@ -191,12 +191,21 @@
       (when (typep inst 'base-call-instruction)
         (setf (call-involved-in-nlx inst) in-nlx-region)))))
 
+(defun perform-predicate-lowering (backend-function)
+  "Lower predicate instructions to call instructions."
+  (do-instructions (inst backend-function)
+    (when (typep inst 'predicate-instruction)
+      (lower-predicate-to-call backend-function inst))))
+
 (defun compile-backend-function-1 (backend-function target)
   (simplify-cfg backend-function)
   (break-critical-edges backend-function)
   (construct-ssa backend-function)
   (localize-constants backend-function)
   (convert-rest-arg-to-dx backend-function)
+  (when *enable-dominance-type-flow*
+    (dominance-aware-type-flow backend-function))
+  (perform-predicate-lowering backend-function)
   (perform-target-lowering backend-function target)
   (loop
      (let ((total 0))

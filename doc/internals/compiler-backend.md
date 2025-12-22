@@ -265,3 +265,6 @@ and `multiple-value-bind`. A higher-level pure-SSA IR might get away with wiggli
 around so that all instructions produce a single "value", and values are referred to by
 pointing directly at their defining instruction. That'd allow virtual-register to be
 completely eliminated at that IR level, being fully implicit.
+
+`instruction-inputs`/`instruction-outputs` cons up fresh lists each call. A better
+representation of operands and outputs would reduce allocation in the compiler.

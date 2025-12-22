@@ -890,6 +890,15 @@
            #:spice-instruction
            #:spice-value
 
+           #:predicate-instruction
+           #:predicate-value
+           #:predicate-result
+
+           #:value-has-tag-p-instruction
+           #:value-has-tag-p-tag
+
+           #:fixnump-instruction
+
            #:compile-backend-function
 
            #:perform-target-lowering

@@ -1,4 +1,4 @@
-;;;; Backend IR instruction definitions.
+;;;; Backend IR core instruction definitions.
 
 (in-package :mezzano.compiler.backend)
 

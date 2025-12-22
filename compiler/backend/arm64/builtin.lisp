@@ -177,7 +177,8 @@
                                     (length (ir:call-arguments inst)))))
         (when (and builtin
                    ;; Predicate result.
-                   ;; FIXME: This should work when the result consumed by the branch is a predicate and other results are ignored.
+                   ;; FIXME: This should work when the result consumed by
+                   ;; the branch is a predicate and other results are ignored.
                    (eql (length (builtin-result-list builtin)) 1)
                    (keywordp (first (builtin-result-list builtin))))
           (when (not (apply (builtin-generator builtin)
