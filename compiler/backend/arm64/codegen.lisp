@@ -23,7 +23,10 @@
     (push i *emitted-lap*)))
 
 (defun emit-debug-info (info spill-locations)
-  (emit `(:debug ,(loop
+  (emit `(:debug ,(append
+                   (loop for (reg . slot) in *callee-save-loc*
+                         collect (list reg slot :value :hidden t))
+                   (loop
                      for (variable location repr) in info
                      collect (list* (c:lexical-variable-name variable)
                                     (if (typep location 'ir:virtual-register)
@@ -34,7 +37,7 @@
                                     (if (getf (c:lexical-variable-plist variable)
                                               'c::hide-from-debug-info)
                                         (list :hidden t)
-                                        ()))))))
+                                        ())))))))
 
 (defun emit-gc-info (&rest metadata)
   (emit `(:gc :frame :layout ,*current-frame-layout* ,@metadata)))
@@ -198,7 +201,8 @@
               (mv-flow (ir::multiple-value-flow backend-function *target*)))
           ;; Create stack frame.
           (emit 'entry-point
-                `(:debug ())
+                `(:debug ,(loop for (reg . slot) in *callee-save-loc*
+                                collect (list reg slot :value :hidden t)))
                 `(:gc :no-frame :incoming-arguments :rcx :layout #*)
                 `(lap:stp :x29 :x30 (:pre :sp -16))
                 `(:gc :no-frame :incoming-arguments :rcx :layout #*00)

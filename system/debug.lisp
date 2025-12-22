@@ -212,8 +212,12 @@ Returns NIL if the function captures no variables."
        (t
         :$inaccessible-value$)))
     (t
-     ;; A register?
-     :$inaccessible-value$)))
+     ;; A register
+     (let* ((registers (fourth frame))
+            (cell (assoc slot registers)))
+       (if cell
+           (cdr cell)
+           :$inaccessible-value$)))))
 
 (defun write-frame-slot (frame slot value &optional (repr :value))
   (typecase slot
@@ -373,7 +377,8 @@ Returns NIL if the function captures no variables."
            (*current-debug-frame*))
       (let ((prev-fp nil))
         (%map-backtrace
-         (lambda (i fp)
+         (lambda (i fp callee-save-regs)
+           (declare (ignore callee-save-regs))
            (incf n-frames)
            (push (list (1- i) fp prev-fp) frames)
            (setf prev-fp fp))))
@@ -531,18 +536,50 @@ Returns NIL if the function captures no variables."
        for restart in restarts
        do (format t "~S ~S: ~A~%" (- restart-count i 1) (restart-name restart) restart))))
 
+(defun platform-callee-save-regs ()
+  #+arm64
+  (list (cons :x13 nil) (cons :x14 nil))
+  #-arm64
+  nil)
+
+(defun update-callee-save-regs (regs fp)
+  (let ((new-fp (memref-unsigned-byte-64 fp 0))
+        (ra (memref-unsigned-byte-64 fp 1)))
+    (when (or (zerop new-fp)
+              (zerop ra))
+      (return-from update-callee-save-regs
+        regs))
+    (let* ((function (return-address-to-function ra))
+           (debug-info (decompress-precise-debug-info
+                        (decode-precise-debug-info
+                         function
+                         (debug-info-precise-variable-data
+                          (function-debug-info function)))))
+           (entry (first debug-info))
+           (layout (cdr (getf (cdr entry) :layout)))
+           (frame (list nil fp)))
+      (loop for pair in regs
+            for location = (assoc (car pair) layout)
+            when location
+              do (setf (cdr pair) (read-frame-slot frame (second location) (third location))))))
+  regs)
+
 (defun %map-backtrace (fn)
-  (do ((i 0 (1+ i))
-       (fp (read-frame-pointer)
-           (memref-unsigned-byte-64 fp 0)))
+  (do* ((i 0 (1+ i))
+        (callee-save-regs
+         (platform-callee-save-regs)
+         (update-callee-save-regs callee-save-regs fp))
+        (fp (read-frame-pointer)
+            (memref-unsigned-byte-64 fp 0)))
       ;; Stop when return address or frame pointer is zero.
       ((or (= fp 0)
            (eql (memref-signed-byte-64 fp 1) 0)))
-    (funcall fn i fp)))
+    (funcall fn i fp (loop for (x . y) in callee-save-regs collect (cons x y)))))
 
 (defstruct frame
   (depth 0 :read-only t)
-  (fp 0 :read-only t))
+  (fp 0 :read-only t)
+  (callee-save-regs '() :read-only t))
 
 (defstruct local-variable
   (name nil :read-only t)
@@ -556,7 +593,7 @@ Returns NIL if the function captures no variables."
      collect (make-local-variable :name name :location location :representation repr)))
 
 (defun local-variable-value (frame local-variable)
-  (let ((value (read-frame-slot (list 0 (frame-fp frame) nil)
+  (let ((value (read-frame-slot (list 0 (frame-fp frame) nil (frame-callee-save-regs frame))
                                 (local-variable-location local-variable)
                                 (local-variable-representation local-variable))))
     (if (eql value :$inaccessible-value$)
@@ -616,17 +653,22 @@ executed, and the offset into it."
 
 (defun map-backtrace (fn)
   (%map-backtrace
-   (lambda (depth fp)
-     (funcall fn (make-frame :depth depth :fp fp)))))
+   (lambda (depth fp callee-save-regs)
+     (funcall fn (make-frame :depth depth :fp fp :callee-save-regs callee-save-regs)))))
+
+(defun map-backtrace2 (fn)
+  (%map-backtrace2
+   (lambda (depth fp callee-save-regs)
+     (funcall fn (make-frame :depth depth :fp fp :callee-save-regs callee-save-regs)))))
 
 (defun backtrace (&key (stream *debug-io*) limit)
   "Print a backtrace on STREAM."
   (%map-backtrace
-   (lambda (i fp)
+   (lambda (i fp callee-save-regs)
      (when (and limit (> i limit))
        (return-from backtrace))
      (let* ((return-address (memref-unsigned-byte-64 fp 1))
-            (fn (frame-function (make-frame :depth i :fp fp)))
+            (fn (frame-function (make-frame :depth i :fp fp :callee-save-regs callee-save-regs)))
             (name (or (if (functionp fn) (function-name fn)) fn)))
        (format stream "~&~X ~X ~S" fp return-address name)))))
 
