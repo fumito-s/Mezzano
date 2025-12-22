@@ -2,13 +2,14 @@
 
 (sys.int::define-lap-function %%return-to-same-thread ()
   (:gc :no-frame :layout #*)
-  (mezzano.lap.arm64:msr :spsel 0)
-  (mezzano.lap.arm64:add :sp :x0 0)
+  (mezzano.lap.arm64:add :sp :x27 0) ; restore original sp_elx
+  (mezzano.lap.arm64:msr :spsel 0) ; switch back to sp_el0
+  (mezzano.lap.arm64:add :sp :x0 0) ; restore stack pointer
   (:gc :frame :layout #*11)
-  (mezzano.lap.arm64:orr :x29 :xzr :x1)
-  (mezzano.lap.arm64:orr :x5 :xzr :xzr)
+  (mezzano.lap.arm64:orr :x29 :xzr :x1) ; restore frame pointer
+  (mezzano.lap.arm64:orr :x5 :xzr :xzr) ; zero value return
   (mezzano.lap.arm64:orr :x0 :x26 :xzr)
-  (mezzano.lap.arm64:msr :daifclr #b1111)
+  (mezzano.lap.arm64:msr :daifclr #b1111) ; reenable interrupts now we're on the safe stack
   (mezzano.lap.arm64:ldp :x13 :x14 (:post :sp 16))
   (:gc :no-frame :layout #*00)
   (mezzano.lap.arm64:ldp :x29 :x30 (:post :sp 16))
