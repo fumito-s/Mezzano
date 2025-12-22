@@ -338,10 +338,23 @@
                           :name 'funcall
                           :arguments (list* fn args)))
           (t ;; Top-level function.
-           (make-instance 'ast-call
-                          :environment env
-                          :name fn
-                          :arguments args)))))
+           (cond ((eql fn 'error)
+                  ;; FIXME: Bit of a hack.
+                  (make-instance 'ast-progn
+                                 :environment env
+                                 :forms (list (make-instance 'ast-call
+                                                             :environment env
+                                                             :name fn
+                                                             :arguments args)
+                                              (make-instance 'ast-call
+                                                             :environment env
+                                                             :name 'sys.int::%%unreachable
+                                                             :arguments '()))))
+                  (t
+                   (make-instance 'ast-call
+                                  :environment env
+                                  :name fn
+                                  :arguments args)))))))
 
 (defun pass1-block (form env)
   (destructuring-bind (name &body forms) (cdr form)
