@@ -378,11 +378,13 @@ Must be performed after SSA conversion."
 (defgeneric dominance-aware-type-flow-update (function instruction info)
   (:method (f i info) info))
 
+(defparameter *branch-instruction-converted* 0)
 (defmethod dominance-aware-type-flow-update (function (instruction branch-instruction) info)
   (loop with value = (branch-value instruction)
         for (known-value data) in info
         when (eql value known-value)
-          do (cond ((eql data :truthy)
+          do (incf *branch-instruction-converted*)
+             (cond ((eql data :truthy)
                     ;; Branch is true. Change to a jump to the true branch.
                     (change-class instruction
                                   'jump-instruction
@@ -398,6 +400,7 @@ Must be performed after SSA conversion."
                     (return))))
   info)
 
+(defparameter *value-has-tag-p-converted* 0)
 (defmethod dominance-aware-type-flow-update (function (instruction value-has-tag-p-instruction) info)
   (loop with value = (predicate-value instruction)
         with tag = (value-has-tag-p-tag instruction)
@@ -408,6 +411,7 @@ Must be performed after SSA conversion."
                   (eql (value-has-tag-p-tag other-predicate) tag))
           do
              ;; Then this instruction is known to be true or false.
+             (incf *value-has-tag-p-converted*)
              (cond ((eql data :known-true-predicate)
                     (push (list (predicate-result instruction) :truthy) info)
                     (change-class instruction
@@ -420,9 +424,26 @@ Must be performed after SSA conversion."
                                   'constant-instruction
                                   :value 'nil
                                   :destination (predicate-result instruction))))
+             (return)
+        when (and (eql value known-value)
+                  (eql data :known-true-predicate)
+                  (or (typep other-predicate 'fixnump-instruction)
+                      (and (typep other-predicate 'value-has-tag-p-instruction)
+                           (not (eql (value-has-tag-p-tag other-predicate) tag)))
+                      (and (not (eql tag sys.int::+tag-immediate+))
+                           (typep other-predicate 'value-has-immediate-tag-p-instruction))))
+          ;; Other instruction refutes this instruction
+          do
+             (incf *value-has-tag-p-converted*)
+             (push (list (predicate-result instruction) :falsey) info)
+             (change-class instruction
+                           'constant-instruction
+                           :value 'nil
+                           :destination (predicate-result instruction))
              (return))
   info)
 
+(defparameter *fixnump-converted* 0)
 (defmethod dominance-aware-type-flow-update (function (instruction fixnump-instruction) info)
   (loop with value = (predicate-value instruction)
         for (known-value data other-predicate) in info
@@ -431,6 +452,95 @@ Must be performed after SSA conversion."
                   (typep other-predicate 'fixnump-instruction))
           do
              ;; Then this instruction is known to be true or false.
+             (incf *fixnump-converted*)
+             (cond ((eql data :known-true-predicate)
+                    (push (list (predicate-result instruction) :truthy) info)
+                    (change-class instruction
+                                  'constant-instruction
+                                  :value 't
+                                  :destination (predicate-result instruction)))
+                   (t ; false
+                    (push (list (predicate-result instruction) :falsey) info)
+                    (change-class instruction
+                                  'constant-instruction
+                                  :value 'nil
+                                  :destination (predicate-result instruction))))
+             (return)
+        when (and (eql value known-value)
+                  (eql data :known-true-predicate)
+                  (or (typep other-predicate 'value-has-tag-p-instruction)
+                      (typep other-predicate 'value-has-immediate-tag-p-instruction)))
+          ;; Other instruction refutes this instruction
+          do
+             (incf *fixnump-converted*)
+             (push (list (predicate-result instruction) :falsey) info)
+             (change-class instruction
+                           'constant-instruction
+                           :value 'nil
+                           :destination (predicate-result instruction))
+             (return))
+  info)
+
+(defparameter *value-has-immediate-tag-p-converted* 0)
+(defmethod dominance-aware-type-flow-update (function (instruction value-has-immediate-tag-p-instruction) info)
+  (loop with value = (predicate-value instruction)
+        with tag = (value-has-immediate-tag-p-tag instruction)
+        for (known-value data other-predicate) in info
+        when (and (eql value known-value)
+                  (member data '(:known-true-predicate :known-false-predicate))
+                  (typep other-predicate 'value-has-immediate-tag-p-instruction)
+                  (eql (value-has-immediate-tag-p-tag other-predicate) tag))
+          do
+             ;; Then this instruction is known to be true or false.
+             (incf *value-has-immediate-tag-p-converted*)
+             (cond ((eql data :known-true-predicate)
+                    (push (list (predicate-result instruction) :truthy) info)
+                    (change-class instruction
+                                  'constant-instruction
+                                  :value 't
+                                  :destination (predicate-result instruction)))
+                   (t ; false
+                    (push (list (predicate-result instruction) :falsey) info)
+                    (change-class instruction
+                                  'constant-instruction
+                                  :value 'nil
+                                  :destination (predicate-result instruction))))
+             (return)
+        when (and (eql value known-value)
+                  (or (and (eql data :known-true-predicate)
+                           (or (typep other-predicate 'fixnump-instruction)
+                               (and (typep other-predicate 'value-has-tag-p-instruction)
+                                    (not (eql (value-has-tag-p-tag other-predicate) sys.int::+tag-immediate+)))
+                               (and (typep other-predicate 'value-has-immediate-tag-p-instruction)
+                                    (not (eql (value-has-tag-immediate-p-tag other-predicate) tag)))))
+                      (and (eql data :known-false-predicate)
+                           (typep other-predicate 'value-has-tag-p-instruction)
+                           (eql (value-has-tag-p-tag other-predicate) sys.int::+tag-immediate+))))
+          ;; Other instruction refutes this instruction
+          do
+             (incf *value-has-immediate-tag-p-converted*)
+             (push (list (predicate-result instruction) :falsey) info)
+             (change-class instruction
+                           'constant-instruction
+                           :value 'nil
+                           :destination (predicate-result instruction))
+             (return))
+  info)
+
+(defparameter *object-of-type-range-p-converted* 0)
+(defmethod dominance-aware-type-flow-update (function (instruction object-of-type-range-p-instruction) info)
+  (loop with value = (predicate-value instruction)
+        with lo-tag = (object-of-type-range-p-lo-tag instruction)
+        with hi-tag = (object-of-type-range-p-hi-tag instruction)
+        for (known-value data other-predicate) in info
+        when (and (eql value known-value)
+                  (member data '(:known-true-predicate :known-false-predicate))
+                  (typep other-predicate 'object-of-type-range-p-instruction)
+                  (eql (object-of-type-range-p-lo-tag other-predicate) lo-tag)
+                  (eql (object-of-type-range-p-hi-tag other-predicate) hi-tag))
+          do
+             ;; Then this instruction is known to be true or false.
+             (incf *object-of-type-range-p-converted*)
              (cond ((eql data :known-true-predicate)
                     (push (list (predicate-result instruction) :truthy) info)
                     (change-class instruction

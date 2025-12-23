@@ -890,7 +890,7 @@
   (emit (make-instance 'unreachable-instruction))
   nil)
 
-(define-primitive fixnump ((object) result-mode)
+(define-primitive sys.int::fixnump ((object) result-mode)
   (let ((result (make-instance 'virtual-register)))
     (emit (make-instance 'fixnump-instruction
                          :value object
@@ -961,6 +961,40 @@
              (emit (make-instance 'value-has-tag-p-instruction
                                   :value (cg-form (first (ast-arguments form)) :value)
                                   :tag (ast-value (second (ast-arguments form)))
+                                  :result result))
+             result))
+          ((and (eql (ast-name form) 'sys.int::%value-has-immediate-tag-p)
+                (eql (length (ast-arguments form)) 2)
+                (typep (second (ast-arguments form)) 'ast-quote)
+                (typep (ast-value (second (ast-arguments form))) '(unsigned-byte 2)))
+           (let ((result (make-instance 'virtual-register)))
+             (emit (make-instance 'value-has-immediate-tag-p-instruction
+                                  :value (cg-form (first (ast-arguments form)) :value)
+                                  :tag (ast-value (second (ast-arguments form)))
+                                  :result result))
+             result))
+          ((and (eql (ast-name form) 'mezzano.runtime::%%object-of-type-p)
+                (eql (length (ast-arguments form)) 2)
+                (typep (second (ast-arguments form)) 'ast-quote)
+                (typep (ast-value (second (ast-arguments form))) '(unsigned-byte 6)))
+           (let ((result (make-instance 'virtual-register)))
+             (emit (make-instance 'object-of-type-range-p-instruction
+                                  :value (cg-form (first (ast-arguments form)) :value)
+                                  :lo-tag (ast-value (second (ast-arguments form)))
+                                  :hi-tag (ast-value (second (ast-arguments form)))
+                                  :result result))
+             result))
+          ((and (eql (ast-name form) 'mezzano.runtime::%%object-of-type-range-p)
+                (eql (length (ast-arguments form)) 3)
+                (typep (second (ast-arguments form)) 'ast-quote)
+                (typep (ast-value (second (ast-arguments form))) '(unsigned-byte 6))
+                (typep (third (ast-arguments form)) 'ast-quote)
+                (typep (ast-value (third (ast-arguments form))) '(unsigned-byte 6)))
+           (let ((result (make-instance 'virtual-register)))
+             (emit (make-instance 'object-of-type-range-p-instruction
+                                  :value (cg-form (first (ast-arguments form)) :value)
+                                  :lo-tag (ast-value (second (ast-arguments form)))
+                                  :hi-tag (ast-value (third (ast-arguments form)))
                                   :result result))
              result))
           ((and prim

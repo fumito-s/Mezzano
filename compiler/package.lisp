@@ -899,6 +899,16 @@
 
            #:fixnump-instruction
 
+           #:value-has-immediate-tag-p-instruction
+           #:value-has-immediate-tag-p-tag
+
+           #:object-of-type-p-instruction
+           #:object-of-type-p-tag
+
+           #:object-of-type-range-p-instruction
+           #:object-of-type-range-p-lo-tag
+           #:object-of-type-range-p-hi-tag
+
            #:compile-backend-function
 
            #:perform-target-lowering
