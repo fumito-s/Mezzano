@@ -54,23 +54,23 @@
              (funcall blender colour to to-offset))
             (t
              ;; Component multiply colour with mask.
-             (let* ((vec-colour (mezzano.simd:make-mmx-vector colour)) ; (0000ARGB)
-                    (vec-mask (mezzano.simd:make-mmx-vector mask-byte)) ; (0000000M)
-                    (vec-zero (mezzano.simd:make-mmx-vector 0))
+             (let* ((vec-colour (mezzano.simd.x86-64:make-mmx-vector colour)) ; (0000ARGB)
+                    (vec-mask (mezzano.simd.x86-64:make-mmx-vector mask-byte)) ; (0000000M)
+                    (vec-zero (mezzano.simd.x86-64:make-mmx-vector 0))
                     ;; Mask (0M0M0M0M)
-                    (unpacked-mask (mezzano.simd:punpcklbw
-                                    (mezzano.simd:pmuludq vec-mask
-                                                          (mezzano.simd:make-mmx-vector #x01010101))
+                    (unpacked-mask (mezzano.simd.x86-64:punpcklbw
+                                    (mezzano.simd.x86-64:pmuludq vec-mask
+                                                          (mezzano.simd.x86-64:make-mmx-vector #x01010101))
                                     vec-zero))
                     ;; Colour (0A0R0G0B)
-                    (unpacked-colour (mezzano.simd:punpcklbw vec-colour vec-zero))
+                    (unpacked-colour (mezzano.simd.x86-64:punpcklbw vec-colour vec-zero))
                     ;; Multiply colour by mask, rounding correctly.
-                    (adjusted-colour (mezzano.simd:pmulhuw
-                                      (mezzano.simd:paddusw
-                                       (mezzano.simd:pmullw unpacked-colour unpacked-mask)
-                                       (mezzano.simd:make-mmx-vector #x0080008000800080))
-                                      (mezzano.simd:make-mmx-vector #x0101010101010101)))
-                    (final-colour (ldb (byte 32 0) (mezzano.simd:mmx-vector-value (mezzano.simd:packuswb adjusted-colour vec-zero)))))
+                    (adjusted-colour (mezzano.simd.x86-64:pmulhuw
+                                      (mezzano.simd.x86-64:paddusw
+                                       (mezzano.simd.x86-64:pmullw unpacked-colour unpacked-mask)
+                                       (mezzano.simd.x86-64:make-mmx-vector #x0080008000800080))
+                                      (mezzano.simd.x86-64:make-mmx-vector #x0101010101010101)))
+                    (final-colour (ldb (byte 32 0) (mezzano.simd.x86-64:mmx-vector-value (mezzano.simd.x86-64:packuswb adjusted-colour vec-zero)))))
                (funcall blender final-colour to to-offset)))))
     (incf to-offset)
     (incf mask-offset)))
@@ -109,26 +109,26 @@
            (setf (aref to to-offset) source))
           (t
            ;; Alpha blending.
-           (let* ((vec-source (mezzano.simd:make-mmx-vector source))
-                  (vec-alpha (mezzano.simd:make-mmx-vector (the (unsigned-byte 8) (ash source-alpha -24))))
-                  (vec-dest (mezzano.simd:make-mmx-vector (aref to to-offset)))
-                  (vec-zero (mezzano.simd:make-mmx-vector 0))
+           (let* ((vec-source (mezzano.simd.x86-64:make-mmx-vector source))
+                  (vec-alpha (mezzano.simd.x86-64:make-mmx-vector (the (unsigned-byte 8) (ash source-alpha -24))))
+                  (vec-dest (mezzano.simd.x86-64:make-mmx-vector (aref to to-offset)))
+                  (vec-zero (mezzano.simd.x86-64:make-mmx-vector 0))
                   ;; source alpha (0A0A0A0A)
-                  (exploded-alpha (mezzano.simd:punpcklbw (mezzano.simd:pmuludq vec-alpha
-                                                                  (mezzano.simd:make-mmx-vector #x01010101))
+                  (exploded-alpha (mezzano.simd.x86-64:punpcklbw (mezzano.simd.x86-64:pmuludq vec-alpha
+                                                                  (mezzano.simd.x86-64:make-mmx-vector #x01010101))
                                                    vec-zero))
                   ;; inverse source alpha (0A0A0A0A)
-                  (inverse-alpha (mezzano.simd:psubb (mezzano.simd:make-mmx-vector #x00FF00FF00FF00FF)
+                  (inverse-alpha (mezzano.simd.x86-64:psubb (mezzano.simd.x86-64:make-mmx-vector #x00FF00FF00FF00FF)
                                               exploded-alpha))
                   ;; Expand source/dest to 0A0R0G0B.
-                  (unpacked-source (mezzano.simd:punpcklbw vec-source vec-zero))
-                  (unpacked-dest (mezzano.simd:punpcklbw vec-dest vec-zero))
+                  (unpacked-source (mezzano.simd.x86-64:punpcklbw vec-source vec-zero))
+                  (unpacked-dest (mezzano.simd.x86-64:punpcklbw vec-dest vec-zero))
                   ;; Multiply dest by inverse alpha, rounding correctly.
-                  (adjusted-dest (mezzano.simd:pmulhuw
-                                  (mezzano.simd:paddusw
-                                   (mezzano.simd:pmullw unpacked-dest inverse-alpha)
-                                   (mezzano.simd:make-mmx-vector #x0080008000800080))
-                                  (mezzano.simd:make-mmx-vector #x0101010101010101)))
-                  (blended (mezzano.simd:paddusw unpacked-source adjusted-dest))
-                  (final (ldb (byte 32 0) (mezzano.simd:mmx-vector-value (mezzano.simd:packuswb blended vec-zero)))))
+                  (adjusted-dest (mezzano.simd.x86-64:pmulhuw
+                                  (mezzano.simd.x86-64:paddusw
+                                   (mezzano.simd.x86-64:pmullw unpacked-dest inverse-alpha)
+                                   (mezzano.simd.x86-64:make-mmx-vector #x0080008000800080))
+                                  (mezzano.simd.x86-64:make-mmx-vector #x0101010101010101)))
+                  (blended (mezzano.simd.x86-64:paddusw unpacked-source adjusted-dest))
+                  (final (ldb (byte 32 0) (mezzano.simd.x86-64:mmx-vector-value (mezzano.simd.x86-64:packuswb blended vec-zero)))))
              (setf (aref to to-offset) final))))))

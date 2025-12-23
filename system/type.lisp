@@ -1088,14 +1088,14 @@
            (#.+object-tag-symbol-value-cell+
             'mezzano.runtime::symbol-value-cell)
            (#.+object-tag-mmx-vector+
-            'mezzano.simd:mmx-vector)
+            'mezzano.simd.x86-64:mmx-vector)
            (#.+object-tag-symbol+
             (cond ((eql object 'nil) 'null)
                   ((eql object 't) 'boolean)
                   ((keywordp object) 'keyword)
                   (t 'symbol)))
            (#.+object-tag-sse-vector+
-            'mezzano.simd:sse-vector)
+            'mezzano.simd.x86-64:sse-vector)
            ((#.+object-tag-instance+
              #.+object-tag-funcallable-instance+)
             (let* ((class (class-of object))

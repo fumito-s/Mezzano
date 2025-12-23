@@ -269,7 +269,7 @@
   ())
 
 (defmethod ir:box-type ((instruction box-mmx-vector-instruction))
-  'mezzano.simd:mmx-vector)
+  'simd:mmx-vector)
 
 (defmethod ir:print-instruction ((instruction box-mmx-vector-instruction))
   (format t "   ~S~%"
@@ -281,7 +281,7 @@
   ())
 
 (defmethod ir:box-type ((instruction unbox-mmx-vector-instruction))
-  'mezzano.simd:mmx-vector)
+  'simd:mmx-vector)
 
 (defmethod ir:print-instruction ((instruction unbox-mmx-vector-instruction))
   (format t "   ~S~%"
@@ -293,7 +293,7 @@
   ())
 
 (defmethod ir:box-type ((instruction box-sse-vector-instruction))
-  'mezzano.simd:sse-vector)
+  'simd:sse-vector)
 
 (defmethod ir:print-instruction ((instruction box-sse-vector-instruction))
   (format t "   ~S~%"
@@ -305,7 +305,7 @@
   ())
 
 (defmethod ir:box-type ((instruction unbox-sse-vector-instruction))
-  'mezzano.simd:sse-vector)
+  'simd:sse-vector)
 
 (defmethod ir:print-instruction ((instruction unbox-sse-vector-instruction))
   (format t "   ~S~%"
@@ -326,9 +326,9 @@
           (ir:box-double-float-instruction
            (values 'sys.int::%%make-double-float-rax :rax))
           (box-mmx-vector-instruction
-           (values 'mezzano.simd::%%make-mmx-vector-rax :rax))
+           (values 'simd::%%make-mmx-vector-rax :rax))
           (box-sse-vector-instruction
-           (values 'mezzano.simd::%%make-sse-vector-xmm0 :xmm0)))
+           (values 'simd::%%make-sse-vector-xmm0 :xmm0)))
       (when box-function
         (let* ((value (ir:box-source inst))
                (result (ir:box-destination inst)))
@@ -369,8 +369,8 @@
                         'ir:constant-instruction)
                  (typep (ir:constant-value
                          (first (gethash (ir:unbox-source inst) defs)))
-                        'mezzano.simd:sse-vector))
-        (let ((value (mezzano.simd:sse-vector-value
+                        'simd:sse-vector))
+        (let ((value (simd:sse-vector-value
                       (ir:constant-value
                        (first (gethash (ir:unbox-source inst) defs)))))
               (dest (ir:unbox-destination inst)))
@@ -393,8 +393,8 @@
                         'ir:constant-instruction)
                  (typep (ir:constant-value
                          (first (gethash (ir:unbox-source inst) defs)))
-                        'mezzano.simd:mmx-vector))
-        (let ((value (mezzano.simd:mmx-vector-value
+                        'simd:mmx-vector))
+        (let ((value (simd:mmx-vector-value
                       (ir:constant-value
                        (first (gethash (ir:unbox-source inst) defs)))))
               (dest (ir:unbox-destination inst)))

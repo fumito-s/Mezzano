@@ -4,7 +4,7 @@
   (:use :cl)
   (:local-nicknames (:gui :mezzano.gui)
                     (:comp :mezzano.gui.compositor)
-                    (:simd :mezzano.simd))
+                    (:simd :mezzano.simd.x86-64))
   (:export #:demo))
 
 (in-package :colour-matrix-demo)

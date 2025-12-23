@@ -219,5 +219,5 @@
 (defclass sys.int::complex-single-float (complex) () (:metaclass built-in-class))
 (defclass sys.int::complex-double-float (complex) () (:metaclass built-in-class))
 
-(defclass mezzano.simd:mmx-vector (t) () (:metaclass built-in-class))
-(defclass mezzano.simd:sse-vector (t) () (:metaclass built-in-class))
+(defclass mezzano.simd.x86-64:mmx-vector (t) () (:metaclass built-in-class))
+(defclass mezzano.simd.x86-64:sse-vector (t) () (:metaclass built-in-class))

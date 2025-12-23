@@ -1,6 +1,6 @@
 ;;;; Functions wrapping x86-64 SIMD instructions
 
-(in-package :mezzano.simd)
+(in-package :mezzano.simd.x86-64)
 
 ;;; MMX (64-bit integer) vectors.
 

@@ -696,6 +696,36 @@
   (:local-nicknames (:sys.lap-x86 :mezzano.lap.x86)
                     (:sys.int :mezzano.internals)))
 
+(defpackage :mezzano.simd.x86-64
+  (:use :cl)
+  (:local-nicknames (:lap :mezzano.lap.x86)
+                    (:c :mezzano.compiler)
+                    (:sys.int :mezzano.internals))
+  (:export #:make-mmx-vector
+           #:mmx-vector-value
+           #:mmx-vector
+           #:mmx-vector-p
+           #:make-sse-vector
+           #:sse-vector-value
+           #:sse-vector-ref
+           #:make-sse-vector-single-float
+           #:sse-vector-single-float-element
+           #:sse-vector-single-float-ref
+           #:sse-vector-single-float-1-ref
+           #:sse-vector-single-float-2-ref
+           #:sse-vector-single-float-4-ref
+           #:sse-vector-short-float-1-ref
+           #:sse-vector-short-float-2-ref
+           #:sse-vector-short-float-4-ref
+           #:sse-vector-short-float-8-ref
+           #:make-sse-vector-double-float
+           #:sse-vector-double-float-element
+           #:sse-vector-double-float-ref
+           #:sse-vector-double-float-1-ref
+           #:sse-vector-double-float-2-ref
+           #:sse-vector
+           #:sse-vector-p))
+
 (defpackage :mezzano.compiler.backend
   (:use :cl :mezzano.compiler)
   (:local-nicknames (:sys.int :mezzano.internals))
@@ -950,7 +980,8 @@
                     (:ir :mezzano.compiler.backend)
                     (:ra :mezzano.compiler.backend.register-allocator)
                     (:c :mezzano.compiler)
-                    (:sys.int :mezzano.internals)))
+                    (:sys.int :mezzano.internals)
+                    (:simd :mezzano.simd.x86-64)))
 
 (defpackage :mezzano.compiler.backend.arm64
   (:use :cl)
@@ -959,36 +990,6 @@
                     (:ra :mezzano.compiler.backend.register-allocator)
                     (:c :mezzano.compiler)
                     (:sys.int :mezzano.internals)))
-
-(defpackage :mezzano.simd
-  (:use :cl)
-  (:local-nicknames (:lap :mezzano.lap.x86)
-                    (:c :mezzano.compiler)
-                    (:sys.int :mezzano.internals))
-  (:export #:make-mmx-vector
-           #:mmx-vector-value
-           #:mmx-vector
-           #:mmx-vector-p
-           #:make-sse-vector
-           #:sse-vector-value
-           #:sse-vector-ref
-           #:make-sse-vector-single-float
-           #:sse-vector-single-float-element
-           #:sse-vector-single-float-ref
-           #:sse-vector-single-float-1-ref
-           #:sse-vector-single-float-2-ref
-           #:sse-vector-single-float-4-ref
-           #:sse-vector-short-float-1-ref
-           #:sse-vector-short-float-2-ref
-           #:sse-vector-short-float-4-ref
-           #:sse-vector-short-float-8-ref
-           #:make-sse-vector-double-float
-           #:sse-vector-double-float-element
-           #:sse-vector-double-float-ref
-           #:sse-vector-double-float-1-ref
-           #:sse-vector-double-float-2-ref
-           #:sse-vector
-           #:sse-vector-p))
 
 (defpackage :mezzano.delimited-continuations
   (:use :cl)

@@ -216,7 +216,7 @@
     "compiler/backend/arm64/number.lisp"
     "compiler/backend/arm64/memory.lisp"
     "compiler/backend/arm64/cons.lisp"
-    ("runtime/simd.lisp" :x86-64)
+    ("runtime/simd-x86-64.lisp" :x86-64)
     "system/numbers/nibbles.lisp"
     "system/file-compiler.lisp"
     "system/clos/constructor.lisp"

@@ -862,13 +862,13 @@ Returns NIL if there is no THE form.")
       (return-from mod-n-transform-candidate-p
         t))
     (when (or (and (typep value 'ast-call)
-                   (member (name value) '(mezzano.simd:mmx-vector-value mezzano.simd::%mmx-vector-value))
+                   (member (name value) '(mezzano.simd.x86-64:mmx-vector-value mezzano.simd.x86-64::%mmx-vector-value))
                    (eql (length (arguments value)) 1)
-                   (match-transform-argument 'mezzano.simd:mmx-vector (first (arguments value))))
+                   (match-transform-argument 'mezzano.simd.x86-64:mmx-vector (first (arguments value))))
               (and (typep value 'ast-call)
-                   (member (name value) '(mezzano.simd:sse-vector-value mezzano.simd::%sse-vector-value))
+                   (member (name value) '(mezzano.simd.x86-64:sse-vector-value mezzano.simd.x86-64::%sse-vector-value))
                    (eql (length (arguments value)) 1)
-                   (match-transform-argument 'mezzano.simd:sse-vector (first (arguments value)))))
+                   (match-transform-argument 'mezzano.simd.x86-64:sse-vector (first (arguments value)))))
       ;; Conversion from mmx/sse--vector to integer.
       (return-from mod-n-transform-candidate-p
         t))

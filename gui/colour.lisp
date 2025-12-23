@@ -127,45 +127,45 @@ otherwise they will be treated as straight alpha and converted to premultiplied 
   ;; A 4-element ARGB single-float SIMD vector containing non-premultiplied colour.
   ;; The alpha channel is stored in lane 0, red in lane 1, green in lane 2, and
   ;; blue in lane 3.
-  'mezzano.simd:sse-vector)
+  'mezzano.simd.x86-64:sse-vector)
 
 (declaim (inline make-simd-colour))
 (defun make-simd-colour (&optional (red 0.0) (green 0.0) (blue 0.0) (alpha 1.0))
   (declare (type single-float red green blue alpha))
-  (mezzano.simd:make-sse-vector-single-float
+  (mezzano.simd.x86-64:make-sse-vector-single-float
    alpha red green blue))
 
 (declaim (inline simd-colour-elements))
 (defun simd-colour-elements (simd-colour)
   "Return the red, green, blue, and alpha channels of SIMD-COLOUR as values."
   (declare (type simd-colour-vector simd-colour))
-  (values (mezzano.simd:sse-vector-single-float-element simd-colour 1)
-          (mezzano.simd:sse-vector-single-float-element simd-colour 2)
-          (mezzano.simd:sse-vector-single-float-element simd-colour 3)
-          (mezzano.simd:sse-vector-single-float-element simd-colour 0)))
+  (values (mezzano.simd.x86-64:sse-vector-single-float-element simd-colour 1)
+          (mezzano.simd.x86-64:sse-vector-single-float-element simd-colour 2)
+          (mezzano.simd.x86-64:sse-vector-single-float-element simd-colour 3)
+          (mezzano.simd.x86-64:sse-vector-single-float-element simd-colour 0)))
 
 (declaim (inline simd-colour-to-floats))
 (defun simd-colour-to-floats (colour)
   "Unpack 4 bytes in a UB32 to 4 floats."
   (declare (type colour colour))
-  (let* ((colour-vec (mezzano.simd:make-sse-vector colour))
-         (zero-vec (mezzano.simd:make-sse-vector 0))
+  (let* ((colour-vec (mezzano.simd.x86-64:make-sse-vector colour))
+         (zero-vec (mezzano.simd.x86-64:make-sse-vector 0))
          ;; Unpack bytes to doublewords.
-         (unpacked-colour (mezzano.simd:punpcklwd
-                            (mezzano.simd:punpcklbw colour-vec zero-vec)
+         (unpacked-colour (mezzano.simd.x86-64:punpcklwd
+                            (mezzano.simd.x86-64:punpcklbw colour-vec zero-vec)
                             zero-vec))
          ;; Convert to single-float.
-         (float-colour (mezzano.simd:cvtdq2ps unpacked-colour)))
+         (float-colour (mezzano.simd.x86-64:cvtdq2ps unpacked-colour)))
     float-colour))
 
 (declaim (inline simd-floats-to-colour))
 (defun simd-floats-to-colour (vec)
   "Pack 4 floats to 4 bytes in a UB32."
-  (declare (type mezzano.simd:sse-vector vec))
-  (let* ((unpacked (mezzano.simd:cvtps2dq vec))
-         (half-pack (mezzano.simd:packssdw unpacked unpacked))
-         (result (mezzano.simd:packuswb half-pack half-pack)))
-    (ldb (byte 32 0) (mezzano.simd:sse-vector-value result))))
+  (declare (type mezzano.simd.x86-64:sse-vector vec))
+  (let* ((unpacked (mezzano.simd.x86-64:cvtps2dq vec))
+         (half-pack (mezzano.simd.x86-64:packssdw unpacked unpacked))
+         (result (mezzano.simd.x86-64:packuswb half-pack half-pack)))
+    (ldb (byte 32 0) (mezzano.simd.x86-64:sse-vector-value result))))
 
 (declaim (inline simd-unpack-colour))
 (defun simd-unpack-colour (colour)
@@ -173,44 +173,44 @@ otherwise they will be treated as straight alpha and converted to premultiplied 
   (declare (type colour colour))
   (let* ((colour-vec (simd-colour-to-floats colour))
          ;; Return to 0-1 range.
-         (colours01 (mezzano.simd:mulps
+         (colours01 (mezzano.simd.x86-64:mulps
                      colour-vec
-                     (mezzano.simd:make-sse-vector-single-float
+                     (mezzano.simd.x86-64:make-sse-vector-single-float
                       (/ 255.0) (/ 255.0) (/ 255.0) (/ 255.0))))
          ;; Convert back to straight colour.
          ;; Make sure alpha is non-zero. If alpha really is zero then
          ;; all the other elements must also be zero.
-         (alpha (mezzano.simd:maxps
-                 (mezzano.simd:shufps colours01 colours01 #4r3333)
-                 (mezzano.simd:make-sse-vector-single-float
+         (alpha (mezzano.simd.x86-64:maxps
+                 (mezzano.simd.x86-64:shufps colours01 colours01 #4r3333)
+                 (mezzano.simd.x86-64:make-sse-vector-single-float
                   single-float-epsilon
                   single-float-epsilon
                   single-float-epsilon
                   ;; Leave alpha unchanged when converting.
                   1.0)))
-         (bgra (mezzano.simd:divps colours01 alpha))
+         (bgra (mezzano.simd.x86-64:divps colours01 alpha))
          ;; Fix order.
-         (result (mezzano.simd:shufps bgra bgra #4r0123)))
+         (result (mezzano.simd.x86-64:shufps bgra bgra #4r0123)))
     result))
 
 (declaim (inline simd-pack-colour))
 (defun simd-pack-colour (simd-colour)
   "Convert SIMD-COLOUR to a COLOUR. Channel values are clamped to 0-1."
   (declare (type simd-colour simd-colour))
-  (let* ((argb01 (mezzano.simd:maxps
-                  (mezzano.simd:minps simd-colour (mezzano.simd:make-sse-vector-single-float 1.0 1.0 1.0 1.0))
-                  (mezzano.simd:make-sse-vector-single-float 0.0 0.0 0.0 0.0)))
+  (let* ((argb01 (mezzano.simd.x86-64:maxps
+                  (mezzano.simd.x86-64:minps simd-colour (mezzano.simd.x86-64:make-sse-vector-single-float 1.0 1.0 1.0 1.0))
+                  (mezzano.simd.x86-64:make-sse-vector-single-float 0.0 0.0 0.0 0.0)))
          ;; Multiple colour channels with alpha.
-         (alpha-scale (mezzano.simd:movss
-                       (mezzano.simd:shufps argb01 argb01 #4r0000)
-                       (mezzano.simd:make-sse-vector-single-float 1.0)))
-         (argb01-premult (mezzano.simd:mulps argb01 alpha-scale))
+         (alpha-scale (mezzano.simd.x86-64:movss
+                       (mezzano.simd.x86-64:shufps argb01 argb01 #4r0000)
+                       (mezzano.simd.x86-64:make-sse-vector-single-float 1.0)))
+         (argb01-premult (mezzano.simd.x86-64:mulps argb01 alpha-scale))
          ;; Scale to 0-255
-         (argb-scaled (mezzano.simd:mulps
+         (argb-scaled (mezzano.simd.x86-64:mulps
                        argb01-premult
-                       (mezzano.simd:make-sse-vector-single-float 255.0 255.0 255.0 255.0)))
+                       (mezzano.simd.x86-64:make-sse-vector-single-float 255.0 255.0 255.0 255.0)))
          ;; Fix the order.
-         (bgra-scaled (mezzano.simd:shufps argb-scaled argb-scaled #4r0123)))
+         (bgra-scaled (mezzano.simd.x86-64:shufps argb-scaled argb-scaled #4r0123)))
     (simd-floats-to-colour bgra-scaled)))
 
 (defun %colour-lerp (c1 c2 a)
@@ -219,16 +219,16 @@ otherwise they will be treated as straight alpha and converted to premultiplied 
            (type single-float a))
   (let* ((c1-vec (simd-colour-to-floats c1))
          (c2-vec (simd-colour-to-floats c2))
-         (a-tmp (mezzano.simd:make-sse-vector-single-float a))
-         (a-vec (mezzano.simd:shufps
+         (a-tmp (mezzano.simd.x86-64:make-sse-vector-single-float a))
+         (a-vec (mezzano.simd.x86-64:shufps
                  a-tmp a-tmp
                  #4r0000))
-         (1-a-vec (mezzano.simd:subps
-                   (mezzano.simd:make-sse-vector-single-float 1.0 1.0 1.0 1.0)
+         (1-a-vec (mezzano.simd.x86-64:subps
+                   (mezzano.simd.x86-64:make-sse-vector-single-float 1.0 1.0 1.0 1.0)
                    a-vec))
-         (c (mezzano.simd:addps
-             (mezzano.simd:mulps 1-a-vec c1-vec)
-             (mezzano.simd:mulps a-vec c2-vec))))
+         (c (mezzano.simd.x86-64:addps
+             (mezzano.simd.x86-64:mulps 1-a-vec c1-vec)
+             (mezzano.simd.x86-64:mulps a-vec c2-vec))))
     (simd-floats-to-colour c)))
 
 (defun colour-lerp (c1 c2 a)
@@ -243,27 +243,27 @@ otherwise they will be treated as straight alpha and converted to premultiplied 
 
 (declaim (inline matrix4-column (setf matrix4-column)))
 (defun matrix4-column (mat col)
-  (mezzano.simd:sse-vector-single-float-ref mat 4 (* col 4)))
+  (mezzano.simd.x86-64:sse-vector-single-float-ref mat 4 (* col 4)))
 (defun (setf matrix4-column) (vec mat col)
-  (setf (mezzano.simd:sse-vector-single-float-ref mat 4 (* col 4)) vec))
+  (setf (mezzano.simd.x86-64:sse-vector-single-float-ref mat 4 (* col 4)) vec))
 
 (declaim (inline matrix4-vector4-multiply))
 (defun matrix4-vector4-multiply (mat vec)
-  (declare (type mezzano.simd:sse-vector vec)
+  (declare (type mezzano.simd.x86-64:sse-vector vec)
            (type matrix4 mat))
   (let* ((c0 (matrix4-column mat 0))
          (c1 (matrix4-column mat 1))
          (c2 (matrix4-column mat 2))
          (c3 (matrix4-column mat 3))
-         (xv (mezzano.simd:shufps vec vec #4r0000))
-         (yv (mezzano.simd:shufps vec vec #4r1111))
-         (zv (mezzano.simd:shufps vec vec #4r2222))
-         (wv (mezzano.simd:shufps vec vec #4r3333))
-         (t0 (mezzano.simd:mulps c0 xv)) ; ax ex ix mx
-         (t1 (mezzano.simd:mulps c1 yv)) ; by fy jy ny
-         (t2 (mezzano.simd:mulps c2 zv)) ; cz gz kz oz
-         (t3 (mezzano.simd:mulps c3 wv))) ; dw hw lw pw
-    (mezzano.simd:addps (mezzano.simd:addps t0 t1) (mezzano.simd:addps t2 t3))))
+         (xv (mezzano.simd.x86-64:shufps vec vec #4r0000))
+         (yv (mezzano.simd.x86-64:shufps vec vec #4r1111))
+         (zv (mezzano.simd.x86-64:shufps vec vec #4r2222))
+         (wv (mezzano.simd.x86-64:shufps vec vec #4r3333))
+         (t0 (mezzano.simd.x86-64:mulps c0 xv)) ; ax ex ix mx
+         (t1 (mezzano.simd.x86-64:mulps c1 yv)) ; by fy jy ny
+         (t2 (mezzano.simd.x86-64:mulps c2 zv)) ; cz gz kz oz
+         (t3 (mezzano.simd.x86-64:mulps c3 wv))) ; dw hw lw pw
+    (mezzano.simd.x86-64:addps (mezzano.simd.x86-64:addps t0 t1) (mezzano.simd.x86-64:addps t2 t3))))
 
 (defun matrix4-multiply (result ma mb)
   (declare (optimize (speed 3) (safety 0) (debug 0))
@@ -277,13 +277,13 @@ otherwise they will be treated as straight alpha and converted to premultiplied 
          (mbc2 (matrix4-column mb 2)) ; C G K O
          (mbc3 (matrix4-column mb 3))); D H L P
     (flet ((frob (b-column)
-             (mezzano.simd:addps
-              (mezzano.simd:addps
-               (mezzano.simd:mulps mac0 (mezzano.simd:shufps b-column b-column #4r0000))    ; a * R0, e * R0, i * R0, m * R0
-               (mezzano.simd:mulps mac1 (mezzano.simd:shufps b-column b-column #4r1111)))   ; b * R1, f * R1, j * R1, n * R1
-              (mezzano.simd:addps
-               (mezzano.simd:mulps mac2 (mezzano.simd:shufps b-column b-column #4r2222))    ; c * R2, g * R2, k * R2, o * R2
-               (mezzano.simd:mulps mac3 (mezzano.simd:shufps b-column b-column #4r3333)))))); d * R3, h * R3, l * R3, p * R3
+             (mezzano.simd.x86-64:addps
+              (mezzano.simd.x86-64:addps
+               (mezzano.simd.x86-64:mulps mac0 (mezzano.simd.x86-64:shufps b-column b-column #4r0000))    ; a * R0, e * R0, i * R0, m * R0
+               (mezzano.simd.x86-64:mulps mac1 (mezzano.simd.x86-64:shufps b-column b-column #4r1111)))   ; b * R1, f * R1, j * R1, n * R1
+              (mezzano.simd.x86-64:addps
+               (mezzano.simd.x86-64:mulps mac2 (mezzano.simd.x86-64:shufps b-column b-column #4r2222))    ; c * R2, g * R2, k * R2, o * R2
+               (mezzano.simd.x86-64:mulps mac3 (mezzano.simd.x86-64:shufps b-column b-column #4r3333)))))); d * R3, h * R3, l * R3, p * R3
       (setf (matrix4-column result 0) (frob mbc0)
             (matrix4-column result 1) (frob mbc1)
             (matrix4-column result 2) (frob mbc2)
@@ -307,18 +307,18 @@ otherwise they will be treated as straight alpha and converted to premultiplied 
            (type colour colour))
   (let* ((simd-colour (simd-unpack-colour colour))
          ;; Fetch the RGB channels only, leaving 1.0 in the alpha channel.
-         (original-rgb (mezzano.simd:movss
+         (original-rgb (mezzano.simd.x86-64:movss
                         simd-colour
-                        (mezzano.simd:make-sse-vector-single-float 1.0)))
+                        (mezzano.simd.x86-64:make-sse-vector-single-float 1.0)))
          ;; Mangle & unmangle the vector ordering so the colour matrix
          ;; layout makes more sense. This could be fixed up by rearranging
          ;; the matrix layout, but that's a bit beyond me.
          (new-rgb (matrix4-vector4-multiply
                    matrix
-                   (mezzano.simd:shufps original-rgb original-rgb
+                   (mezzano.simd.x86-64:shufps original-rgb original-rgb
                                         #4r0321)))
          ;; Restore alpha.
-         (new-colour (mezzano.simd:movss (mezzano.simd:shufps new-rgb new-rgb
+         (new-colour (mezzano.simd.x86-64:movss (mezzano.simd.x86-64:shufps new-rgb new-rgb
                                                               #4r2103)
                                          simd-colour)))
     (simd-pack-colour new-colour)))
