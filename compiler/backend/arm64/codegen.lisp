@@ -1294,22 +1294,21 @@
   nil)
 
 (defmethod emit-lap (backend-function (instruction arm64-atomic-instruction) uses defs)
-  (let ((label (mezzano.lap:make-label)))
-    ;; Convert to unboxed integer (scaled appropriately), with tag adjustment.
-    (emit `(lap:add :x9 :xzr ,(arm64-atomic-index instruction) :lsl ,(- 3 sys.int::+n-fixnum-bits+))
-          `(lap:sub :x9 :x9 (- (object-slot-displacement 0))))
-    ;; Generate the address.
-    (emit `(lap:add :x9 :x1 :x9))
-    ;; Move to linked gc mode.
-    ;; x9 is interior pointer into x1.
-    (emit-gc-info :extra-registers :rax)
-    ;; Atomic op
-    (emit (list (arm64-instruction-opcode instruction)
-                (arm64-atomic-rhs instruction)
-                (arm64-atomic-old-value instruction)
-                '(:x9)))
-    ;; Finish up.
-    (emit-gc-info)))
+  ;; Convert to unboxed integer (scaled appropriately), with tag adjustment.
+  (emit `(lap:add :x9 :xzr ,(arm64-atomic-index instruction) :lsl ,(- 3 sys.int::+n-fixnum-bits+))
+        `(lap:sub :x9 :x9 (- (object-slot-displacement 0))))
+  ;; Generate the address.
+  (emit `(lap:add :x9 :x1 :x9))
+  ;; Move to linked gc mode.
+  ;; x9 is interior pointer into x1.
+  (emit-gc-info :extra-registers :rax)
+  ;; Atomic op
+  (emit (list (arm64-instruction-opcode instruction)
+              (arm64-atomic-rhs instruction)
+              (arm64-atomic-old-value instruction)
+              '(:x9)))
+  ;; Finish up.
+  (emit-gc-info))
 
 (defmethod emit-lap (backend-function (instruction arm64-cas-instruction) uses defs)
   ;; Convert to unboxed integer (scaled appropriately), with tag adjustment.
