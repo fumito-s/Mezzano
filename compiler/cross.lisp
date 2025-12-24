@@ -80,6 +80,7 @@
            :byte-position
            :ldb
            :dpb
+           :mask-field
            :subtypep
            :upgraded-array-element-type
            :namestring

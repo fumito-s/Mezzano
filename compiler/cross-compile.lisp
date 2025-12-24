@@ -172,6 +172,9 @@
               `(ldb ,btemp ,access-form) ;Accessing form.
               ))))
 
+(defun mask-field (bytespec integer)
+  (logand integer (dpb -1 bytespec 0)))
+
 (defparameter *char-name-alist*
   ;; C0 control characters, prioritize friendly names.
   '((#x0000 "Null" "Nul")
