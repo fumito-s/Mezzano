@@ -22,6 +22,7 @@
 (defmethod dis:inst-size ((inst arm64-instruction))
   (case (inst-opcode inst)
     ((:d64/le :jump-target) 8)
+    (:align (- (first (inst-operands inst)) (logand (dis:inst-offset inst) (1- (first (inst-operands inst))))))
     (t 4)))
 
 (defun load/store-exclusive (context word)
@@ -931,13 +932,20 @@
                                            (1- (length (dis:context-instructions context)))))
                                     '(a64:ret a64:br a64:b))))
                (setf (in-literal-pool-p context) t)
-               (cond ((logtest start 7)
+               (decf (slot-value context 'dis::%offset) 4) ; because we consumed 4 bytes.
+               (cond ((and (member (inst-opcode
+                                    (aref (dis:context-instructions context)
+                                          (1- (length (dis:context-instructions context)))))
+                                   '(a64:ret a64:br a64:b))
+                           (logtest start 15))
                       ;; Literal pool always start 16b-aligned
                       (setf inst (make-instance 'arm64-instruction
                                                :opcode :align
-                                               :operands (list 16))))
+                                               :operands (list 16)))
+                      ;; Consume however many bytes are needed to bring us to alignment
+                      (dotimes (i (- 16 (logand start 15)))
+                        (dis:consume-ub8 context)))
                      (t
-                      (decf (slot-value context 'dis::%offset) 4) ; because we consumed 4 bytes.
                       (setf inst (make-instance 'arm64-instruction
                                                 :opcode :d64/le
                                                 :operands (list (dis:consume-ub64/le context)))))))
@@ -966,6 +974,19 @@
                                (second operand))
                             :createp t)))
              inst)))))
+
+(defmethod dis:print-instruction-bytes ((context arm64-disassembler-context) offset instruction)
+  (if (keywordp (inst-opcode instruction))
+      (call-next-method)
+      (format t "~8,'0X"
+              (loop
+                with result = 0
+                with function = (dis:context-function context)
+                for i from offset
+                for shift below (dis:inst-size instruction)
+                do (setf result (logior result
+                                        (ash (dis:code-byte function i) (* shift 8))))
+                finally (return result)))))
 
 (defmethod dis:print-instruction ((context arm64-disassembler-context) instruction
                                   &key (print-annotations t) (print-labels t))

@@ -8,6 +8,7 @@
            #:disassembler-context-function
            #:instruction-at
            #:print-instruction
+           #:print-instruction-bytes
            #:*print-gc-metadata*
            #:*print-debug-metadata*
 
@@ -110,6 +111,16 @@
 (defgeneric print-instruction (context instruction
                                &key print-annotations print-labels))
 
+(defgeneric print-instruction-bytes (context offset instruction))
+
+(defmethod print-instruction-bytes (context offset instruction)
+  (format t "~{~2,'0X ~}"
+          (loop
+            with function = (context-function context)
+            repeat (inst-size instruction)
+            for i from offset
+            collect (code-byte function i))))
+
 (defun disassemble-subfunction (function architecture)
   (let ((base-address (logand (sys.int::lisp-object-address function) -16))
         (offset (code-initial-offset function))
@@ -142,11 +153,8 @@
              (format t " L~D" label)))
          (format t "~7T~8,'0X: " (+ base-address offset))
          (cond (decoded
-                (format t "~{~2,'0X ~}~50T"
-                        (loop
-                           repeat (inst-size decoded)
-                           for i from offset
-                           collect (code-byte function i)))
+                (print-instruction-bytes context offset decoded)
+                (format t "~50T")
                 (print-instruction context decoded)
                 (terpri)
                 (incf offset (inst-size decoded)))
