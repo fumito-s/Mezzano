@@ -133,6 +133,19 @@
          (format t " rflags: ~8,'0X~%" (mezzano.supervisor:thread-state-rflags thread))
          (format t " rsp: ~8,'0X~%" (mezzano.supervisor:thread-state-rsp thread))
          (format t "  ss: ~8,'0X~%" (mezzano.supervisor:thread-state-ss thread))
+         #+arm64
+         (flet ((read-xmm (index)
+                  (let ((vector (make-array 16 :element-type '(unsigned-byte 8))))
+                    (dotimes (i 16)
+                      (setf (aref vector i) (mezzano.supervisor::thread-fxsave-area thread (+ (* index 16) i))))
+                    (logior
+                     (ub64ref/le vector 0)
+                     (ash (ub64ref/le vector 8) 64)))))
+           (dotimes (i 32)
+             (when (< i 10)
+               (write-char #\space))
+             (format t " q~D: ~32,'0X~%" i (read-xmm i))))
+         #+x86-64
          (flet ((read-xmm (index)
                   (let ((vector (make-array 16 :element-type '(unsigned-byte 8))))
                     (dotimes (i 16)
@@ -301,7 +314,7 @@ If TRIM-STEPPER-NOISE is true, then instructions executed as part of the trace p
             (when (eql (mezzano.supervisor:thread-state thread) :dead)
               (format t "Thread has died. ~:D instructions executed~%" instructions-stepped)
               (return))
-            (when full-dump
+            (when (and full-dump (not prestart))
               (dump-thread-state thread))
             (safe-single-step-thread thread :report-skipped-functions print-instructions)
             (let ((rip (mezzano.supervisor:thread-state-rip thread)))
