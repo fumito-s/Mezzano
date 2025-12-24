@@ -1073,7 +1073,8 @@ This is required to make the GC interrupt safe."
       #.+object-tag-complex-short-float+
       #.+object-tag-complex-long-float+
       #.+object-tag-mmx-vector+
-      #.+object-tag-sse-vector+))
+      #.+object-tag-sse-vector+
+      #.+object-tag-simd-pack+))
     (#.+object-tag-weak-pointer+
      (scan-weak-pointer object cycle-kind))
     (#.+object-tag-delimited-continuation+
@@ -1319,6 +1320,8 @@ a pointer to the new object. Leaves a forwarding pointer in place."
           2)
          (#.+object-tag-sse-vector+
           4)
+         (#.+object-tag-simd-pack+
+          (mezzano.simd::simd-pack-size object))
          (#.+object-tag-symbol+
           6)
          ((#.+object-tag-instance+
@@ -1764,7 +1767,8 @@ Additionally update the card table offset fields and clear the mark bits."
       #.+object-tag-complex-short-float+
       #.+object-tag-complex-long-float+
       #.+object-tag-mmx-vector+
-      #.+object-tag-sse-vector+))
+      #.+object-tag-sse-vector+
+      #.+object-tag-simd-pack+))
     (#.+object-tag-weak-pointer+
      ;; not implemented
      nil)

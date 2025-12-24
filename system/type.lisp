@@ -621,6 +621,23 @@
           (values (and ok-1 ok-2) t)
           (values nil nil)))))
 
+(defun simd-pack-subtypep (t1 t2 environment)
+  (let ((t1-element (if (listp t1) (or (second t1) '*) '*))
+        (t1-count (if (listp t1) (or (third t1) '*) '*))
+        (t2-element (if (listp t2) (or (second t2) '*) '*))
+        (t2-count (if (listp t2) (or (third t2) '*) '*)))
+    (cond
+      ;; Element types must be equal
+      ((not (or (eql t2-element '*)
+                (type-equal t1-element t2-element environment)))
+       (values nil t))
+      ;; Counts must be equal
+      ((not (or (eql t2-count '*)
+                (eql t1-count t2-count)))
+       (values nil t))
+      (t
+       (values t t)))))
+
 ;;; This is annoyingly incomplete and isn't particularly well integrated.
 (defun subtypep (type-1 type-2 &optional environment)
   (declare (notinline typep)) ; ### Boostrap hack.
@@ -719,6 +736,11 @@
                                                     t1-dimension-spec
                                                     t2-dimension-spec)))))
                        t))))
+          ((and (or (and (consp t1) (eql (first t1) 'mezzano.simd:simd-pack))
+                    (eql t1 'mezzano.simd:simd-pack))
+                (or (and (consp t2) (eql (first t2) 'mezzano.simd:simd-pack))
+                    (eql t2 'mezzano.simd:simd-pack)))
+           (simd-pack-subtypep t1 t2 environment))
           ((and (consp t1) (eql (first t1) 'eql))
            (handler-case
                (destructuring-bind (object) (rest t1)
@@ -1096,6 +1118,10 @@
                   (t 'symbol)))
            (#.+object-tag-sse-vector+
             'mezzano.simd.x86-64:sse-vector)
+           (#.+object-tag-simd-pack+
+            (list 'mezzano.simd:simd-pack
+                  (mezzano.simd:simd-pack-element-type object)
+                  (mezzano.simd:simd-pack-element-count object)))
            ((#.+object-tag-instance+
              #.+object-tag-funcallable-instance+)
             (let* ((class (class-of object))

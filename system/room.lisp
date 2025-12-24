@@ -55,7 +55,7 @@
     invalid-110001             ; #b110001
     invalid-110010             ; #b110010
     mezzano.simd.x86-64:sse-vector ; #b110011
-    invalid-110100             ; #b110100
+    mezzano.simd:simd-pack     ; #b110100
     instance                   ; #b110101
     function-reference         ; #b110110
     interrupt-frame            ; #b110111

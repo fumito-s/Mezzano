@@ -221,3 +221,5 @@
 
 (defclass mezzano.simd.x86-64:mmx-vector (t) () (:metaclass built-in-class))
 (defclass mezzano.simd.x86-64:sse-vector (t) () (:metaclass built-in-class))
+
+(defclass mezzano.simd:simd-pack (t) () (:metaclass built-in-class))

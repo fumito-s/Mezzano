@@ -43,10 +43,13 @@
         ,errorp)
       whole))
 
+(defun raise-unknown-class (name)
+  (error 'unknown-class :name name))
+
 (defun find-class-in-reference (reference &optional (errorp t))
   (or (class-reference-class reference)
       (and errorp
-           (error 'unknown-class :name (class-reference-name reference)))))
+           (raise-unknown-class (class-reference-name reference)))))
 
 (defun find-class (symbol &optional (errorp t) environment)
   (declare (ignore environment))

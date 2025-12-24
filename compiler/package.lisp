@@ -696,6 +696,16 @@
   (:local-nicknames (:sys.lap-x86 :mezzano.lap.x86)
                     (:sys.int :mezzano.internals)))
 
+(defpackage :mezzano.simd
+  (:use :cl)
+  (:local-nicknames (:int :mezzano.internals))
+  (:export #:simd-pack
+           #:make-simd-pack
+           #:transmute-simd-pack
+           #:simd-pack-element-type
+           #:simd-pack-element-count
+           #:simd-pack-element))
+
 (defpackage :mezzano.simd.x86-64
   (:use :cl)
   (:local-nicknames (:lap :mezzano.lap.x86)
