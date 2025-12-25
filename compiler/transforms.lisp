@@ -743,34 +743,36 @@
 (define-fast-array-transform double-float sys.int::%object-ref-double-float)
 
 ;;; AREF and AREF-n transforms.
+;;; Transform to a call to row-major-aref+array-row-major-index
+(defmacro define-array-transform (name row-major-name element-type n)
+  (let ((indices (loop
+                   repeat n
+                   collect (gensym "INDEX"))))
+    `(progn
+       ;; These are always safe.
+       (define-transform ,name ((array (array ,element-type ,(make-list n :initial-element '*)))
+                                ,@(loop
+                                    for index in indices
+                                    collect (list index 'fixnum)))
+           ((:optimize (= speed 3)))
+         `(call ,',row-major-name ,array (call array-row-major-index ,array ,,@indices)))
+       (define-transform (setf ,name) (value
+                                       (array (array ,element-type ,(make-list n :initial-element '*)))
+                                       ,@(loop
+                                           for index in indices
+                                           collect (list index 'fixnum)))
+           ((:optimize (= speed 3)))
+         `(call (setf ,',row-major-name) ,value ,array (call array-row-major-index ,array ,,@indices))))))
 
-(macrolet ((def (name n)
-             (let ((indices (loop
-                               repeat n
-                               collect (gensym "INDEX"))))
-               `(progn
-                  ;; These are always safe.
-                  (define-transform ,name ((array (array * ,(make-list n :initial-element '*)))
-                                           ,@(loop
-                                                for index in indices
-                                                collect (list index 'fixnum)))
-                      ((:optimize (= speed 3)))
-                    `(call row-major-aref ,array (call array-row-major-index ,array ,,@indices)))
-                  (define-transform (setf ,name) (value
-                                                  (array (array * ,(make-list n :initial-element '*)))
-                                                  ,@(loop
-                                                       for index in indices
-                                                       collect (list index 'fixnum)))
-                      ((:optimize (= speed 3)))
-                    `(call (setf row-major-aref) ,value ,array (call array-row-major-index ,array ,,@indices)))))))
-  (def aref 0)
-  (def aref 1)
-  (def aref 2)
-  (def aref 3)
-  (def aref 4)
-  (def sys.int::aref-1 1)
-  (def sys.int::aref-2 2)
-  (def sys.int::aref-3 3))
+(defmacro define-aref-transform (name row-major-name element-type)
+  `(progn
+     ,@(loop for i from 1 to 4
+             collect `(define-array-transform ,name ,row-major-name ,element-type ,i))))
+
+(define-aref-transform aref row-major-aref *)
+(define-array-transform sys.int::aref-1 row-major-aref * 1)
+(define-array-transform sys.int::aref-2 row-major-aref * 2)
+(define-array-transform sys.int::aref-3 row-major-aref * 3)
 
 ;;; ARRAY-ROW-MAJOR-INDEX transforms.
 (macrolet ((def (n)

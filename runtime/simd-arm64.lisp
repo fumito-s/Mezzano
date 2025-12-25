@@ -271,6 +271,90 @@
                              name
                              `(,ty ,name))))))))
 
+(defmacro %define-aref-transforms (aref row-major-aref %row-major-aref scalar-type vector-type n-lanes setter)
+  "Generate wrapper functions and transforms to transform a call to aref/row-major-aref to the appropriate builtin."
+  `(progn
+     (defun ,aref (,@(when setter '(value)) array &rest subscripts)
+       ;; FIXME: Since we're loading N elements out of the array, we should check bounds
+       ;; on the last subscript.
+       (funcall ',row-major-aref ,@(when setter '(value)) array (apply #'array-row-major-index array subscripts)))
+     ;; TODO: Support arbitrary non-simple arrays.
+     (defun ,row-major-aref (,@(when setter '(value)) array index)
+       (check-type array (simple-array ,scalar-type *))
+       (assert (<= 0 index))
+       (assert (< (+ index ,n-lanes) (array-total-size array)))
+       (funcall ',%row-major-aref
+                ,@(when setter '(value))
+                (if (typep array '(simple-array * (*)))
+                    array ; 1D simple array
+                    ;; Otherwise fetch the underlying 1D storage array
+                    (int::%object-ref-t array 'int::+complex-array-storage+))
+                index))
+     ;; TODO: Support other non-1D arrays
+     ;; TODO: Broadcast scalar values.
+     (c::define-transform ,row-major-aref (,@(when setter `((value ,vector-type)))
+                                           (vector (simple-array ,scalar-type (*)) array-type)
+                                           (index fixnum index-type))
+         ((:optimize (= safety 0) (= speed 3)))
+       `(the ,',vector-type
+             (progn
+               ,(c::insert-bounds-check vector array-type index index-type :adjust ,(1- n-lanes))
+               (c::call ,',%row-major-aref ,,@(when setter '(value)) ,vector ,index))))))
+
+;;; Generate aref accessors for the given type.
+
+(defmacro define-aref (aref row-major-aref scalar-type vector-type n-lanes)
+  (let ((%row-major-aref
+          (intern (format nil "%~A" row-major-aref) (symbol-package row-major-aref))))
+    `(progn
+       (c::define-aref-transform ,aref ,row-major-aref ,scalar-type)
+
+       (%define-aref-transforms ,aref ,row-major-aref ,%row-major-aref ,scalar-type ,vector-type ,n-lanes nil)
+       (%define-aref-transforms (setf ,aref) (setf ,row-major-aref) (setf ,%row-major-aref) ,scalar-type ,vector-type ,n-lanes t)
+
+       (c.a64::define-builtin ,%row-major-aref ((array index) result
+                                                :has-wrapper nil)
+         (let ((unboxed-result (make-instance
+                                'mezzano.compiler.backend:virtual-register
+                                :kind :advsimd)))
+           (c.a64::with-builtin-object-access (ea ea-inputs array index ,(/ 16 n-lanes))
+             (c.a64::emit
+              (make-instance 'c.a64::arm64-instruction
+                             :opcode 'a64:ldr
+                             :operands (list unboxed-result ea)
+                             :inputs ea-inputs
+                             :outputs (list unboxed-result))))
+           (c.a64::emit
+            (make-instance 'c.a64::box-advsimd-instruction
+                           :source unboxed-result
+                           :destination result
+                           :header (simd::encode-simd-pack-header ',scalar-type ,n-lanes)))))
+       (defun ,%row-major-aref (array index)
+         (,%row-major-aref array index))
+
+       (c.a64::define-builtin (setf ,%row-major-aref) ((value array index) result
+                                                       :has-wrapper nil)
+         (let ((unboxed-value (make-instance
+                               'mezzano.compiler.backend:virtual-register
+                               :kind :advsimd)))
+           (c.a64::emit
+            (make-instance 'c.a64::unbox-advsimd-instruction
+                           :source value
+                           :destination unboxed-value))
+           (c.a64::with-builtin-object-access (ea ea-inputs array index ,(/ 16 n-lanes))
+             (c.a64::emit
+              (make-instance 'c.a64::arm64-instruction
+                             :opcode 'a64:str
+                             :operands (list unboxed-value ea)
+                             :inputs (list* unboxed-value ea-inputs)
+                             :outputs '())))
+           (c.a64::emit
+            (make-instance 'mezzano.compiler.backend:move-instruction
+                           :source value
+                           :destination result))))
+       (defun (setf ,%row-major-aref) (value array index)
+         (setf (,%row-major-aref array index) value)))))
+
 ;;; Generate a broadcast cast function, either returning a vector of the correct type
 ;;; unchanged, or a scalar broadcast to a vector.
 
@@ -421,6 +505,9 @@
 (int::define-commutative-arithmetic-operator f32.4+ f32.4+-two-arg (f32.4 0.0f0))
 (int::define-commutative-arithmetic-operator f64.2+ f64.2+-two-arg (f64.2 0.0d0))
 
+(define-aref f32.4-aref f32.4-row-major-aref f32 f32.4 4)
+(define-aref f64.2-aref f64.2-row-major-aref f64 f64.2 2)
+
 ;;; Integer vectors
 
 (defmacro define-integer-vector (scalar-type vector-type bit-width lane-count signedp)
@@ -460,7 +547,9 @@
 
          (define-arithmetic-operator ,(name "+") ,(name "+-TWO-ARG") (,vector-type 0) :commutative t)
          (define-arithmetic-operator ,(name "+-SATURATING") ,(name "+-SATURATING-TWO-ARG") (,vector-type 0) :commutative t)
-         (define-arithmetic-operator ,(name "-") ,(name "--TWO-ARG") (,vector-type 1))))))
+         (define-arithmetic-operator ,(name "-") ,(name "--TWO-ARG") (,vector-type 1))
+
+         (define-aref ,(name "-AREF") ,(name "-ROW-MAJOR-AREF") ,scalar-type ,vector-type ,lane-count)))))
 
 (define-integer-vector u8  u8.16 8  16 nil)
 (define-integer-vector u16 u16.8 16 8  nil)

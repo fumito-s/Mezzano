@@ -235,9 +235,9 @@
          (opc (ldb (byte 2 22) word))
          (option (ldb (byte 3 13) word))
          (opcode (if simd&fp
-                     (case opc
-                       (0 'a64:str)
-                       (1 'a64:ldr))
+                     (if (logbitp 0 opc)
+                         'a64:ldr
+                         'a64:str)
                      (case size
                        (0 (case opc
                             (0 'a64:strb)
@@ -275,7 +275,9 @@
     (make-instance 'arm64-instruction
                    :opcode opcode
                    ;; FIXME: Register decode here is wrong
-                   :operands (list (decode-gp64 (ldb +rt+ word))
+                   :operands (list (if simd&fp
+                                       (decode-fp (ldb +rt+ word) :q)
+                                       (decode-gp64 (ldb +rt+ word)))
                                    address))))
 
 ;; Load/store register (unsigned immediate)

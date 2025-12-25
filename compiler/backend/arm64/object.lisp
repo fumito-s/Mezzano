@@ -167,8 +167,8 @@
   (let ((disp (gensym "DISP"))
         (disp-reg (gensym "DISP-REG"))
         (scaled-index (gensym "SCALED-INDEX")))
-    `(cond ((constant-value-p index 'fixnum)
-            (let ((,disp (object-slot-displacement (fetch-constant-value index) ',scale)))
+    `(cond ((constant-value-p ,index 'fixnum)
+            (let ((,disp (object-slot-displacement (fetch-constant-value ,index) ',scale)))
               ; TODO: This could be cleverer based on the transfer size, instructions can support a 12-bit unsigned scaled-by-width immediate
               (cond ((typep ,disp '(signed-byte 6))
                      (let ((,effective-address (list ,object ,disp))
