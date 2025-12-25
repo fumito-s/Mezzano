@@ -706,6 +706,14 @@
            #:simd-pack-element-count
            #:simd-pack-element))
 
+(defpackage :mezzano.simd.arm64
+  (:use :cl)
+  (:local-nicknames (:int :mezzano.internals)
+                    (:simd :mezzano.simd)
+                    (:a64 :mezzano.lap.arm64)
+                    (:c :mezzano.compiler)
+                    (:c.a64 :mezzano.compiler.backend.arm64)))
+
 (defpackage :mezzano.simd.x86-64
   (:use :cl)
   (:local-nicknames (:lap :mezzano.lap.x86)

@@ -218,6 +218,7 @@
     "compiler/backend/arm64/cons.lisp"
     "runtime/simd.lisp"
     ("runtime/simd-x86-64.lisp" :x86-64)
+    ("runtime/simd-arm64.lisp" :arm64)
     "system/numbers/nibbles.lisp"
     "system/file-compiler.lisp"
     "system/clos/constructor.lisp"

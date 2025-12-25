@@ -545,6 +545,11 @@
                           (vreg-stack-slot (ir:spill-destination instruction))))
        (:fp-128
         (emit-stack-store (lap::convert-width (ir:spill-source instruction) 64)
+                          (vreg-stack-slot (ir:spill-destination instruction))))))
+    (:advsimd
+     (ecase (lap::register-class (ir:spill-source instruction))
+       (:fp-128
+        (emit-stack-store (ir:spill-source instruction)
                           (vreg-stack-slot (ir:spill-destination instruction))))))))
 
 (defmethod emit-lap (backend-function (instruction ir:fill-instruction) uses defs)
@@ -572,6 +577,11 @@
                          (vreg-stack-slot (ir:fill-source instruction))))
        (:fp-128
         (emit-stack-load (lap::convert-width (ir:fill-destination instruction) 64)
+                         (vreg-stack-slot (ir:fill-source instruction))))))
+    (:advsimd
+     (ecase (lap::register-class (ir:fill-destination instruction))
+       (:fp-128
+        (emit-stack-load (ir:fill-destination instruction)
                          (vreg-stack-slot (ir:fill-source instruction))))))))
 
 (defmethod emit-lap (backend-function (instruction arm64-instruction) uses defs)
@@ -583,10 +593,16 @@
                                          (fetch-literal/128 (second op)))
                                         ((and (consp op) (eql (first op) :literal))
                                          (fetch-literal (second op)))
+                                        ((and (consp op) (eql (first op) :gp-32))
+                                         (lap::convert-width (second op) 32))
+                                        ((and (consp op) (eql (first op) :gp-64))
+                                         (second op))
                                         ((and (consp op) (eql (first op) :fp-32))
                                          (lap::convert-width (second op) 32))
                                         ((and (consp op) (eql (first op) :fp-64))
                                          (lap::convert-width (second op) 64))
+                                        ((and (consp op) (eql (first op) :fp-128))
+                                         (lap::convert-width (second op) 128))
                                         (t op)))))
     (emit (list* (arm64-instruction-opcode instruction) real-operands))))
 
@@ -1286,6 +1302,11 @@
 (defmethod emit-lap (backend-function (instruction ir:unbox-double-float-instruction) uses defs)
   (emit-object-load (lap::convert-width (ir:unbox-destination instruction) 64)
                     (ir:unbox-source instruction)))
+
+(defmethod emit-lap (backend-function (instruction unbox-advsimd-instruction) uses defs)
+  (emit-object-load (lap::convert-width (ir:unbox-destination instruction) 128)
+                    (ir:unbox-source instruction)
+                    :slot 1))
 
 (defmethod emit-lap (backend-function (instruction ir:debug-instruction) uses defs)
   nil)
