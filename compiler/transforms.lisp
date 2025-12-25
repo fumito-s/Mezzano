@@ -265,14 +265,24 @@
                                                 :use-count 1)
                                  (value-type arg))))
          (new-form (apply (transform-body transform) temps)))
-    (if new-form
-        (ast `(let ,(loop
-                       for temp in temps
-                       for arg in arguments
-                       collect (list (first temp) arg))
-                ,new-form)
-             inherit)
-        nil)))
+    (cond ((and (consp new-form)
+                (eql (first new-form) 'the))
+           (ast `(the ,(second new-form)
+                      (let ,(loop
+                              for temp in temps
+                              for arg in arguments
+                              collect (list (first temp) arg))
+                        ,new-form))
+                inherit))
+          (new-form
+           (ast `(let ,(loop
+                         for temp in temps
+                         for arg in arguments
+                         collect (list (first temp) arg))
+                   ,new-form)
+                inherit))
+          (t
+           nil))))
 
 ;;; Ordering of transforms in this file is important!
 ;;; Transforms defined later are tested first, before those that are defined earlier.
