@@ -39,6 +39,7 @@ end
 `gu (break "BOOTLOADER-ENTRY-POINT")` - break on a symbol
 `gu (where)` - print current function name
 `gu (unwind)` - backtrace
+`gu (unwind2)` - backtrace, but try to extract current function name from memory instead of the map file
 
 ## Building from the repl
 

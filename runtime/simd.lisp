@@ -42,24 +42,48 @@
     "Test if X is a power of two."
     (zerop (logand x (1- x))))
 
-  ;; TODO: Make this a bit more clever resolving the element-type
   (defun encode-simd-pack-header (element-type element-count)
     (let ((header 0))
       (assert (pow2p element-count))
       (setf (ldb +simd-pack-element-count+ header) (1- (integer-length element-count)))
       (cond
-        ((eql element-type 'short-float)
+        ((int::type-equal element-type 'short-float)
          (setf (ldb +simd-pack-element-type+ header) +simd-pack-element-type-float+
                (ldb +simd-pack-element-width+ header) 4))
-        ((eql element-type 'single-float)
+        ((int::type-equal element-type 'single-float)
          (setf (ldb +simd-pack-element-type+ header) +simd-pack-element-type-float+
                (ldb +simd-pack-element-width+ header) 5))
-        ((eql element-type 'double-float)
+        ((int::type-equal element-type 'double-float)
          (setf (ldb +simd-pack-element-type+ header) +simd-pack-element-type-float+
                (ldb +simd-pack-element-width+ header) 6))
-        ((eql element-type 'bit)
+        ((int::type-equal element-type 'bit)
          (setf (ldb +simd-pack-element-type+ header) +simd-pack-element-type-unsigned-byte+
                (ldb +simd-pack-element-width+ header) 0))
+        ;; TODO: Make this a bit more clever resolving the element-type
+        ((int::type-equal element-type '(unsigned-byte 8))
+         (setf (ldb +simd-pack-element-type+ header) +simd-pack-element-type-unsigned-byte+
+               (ldb +simd-pack-element-width+ header) 3))
+        ((int::type-equal element-type '(unsigned-byte 16))
+         (setf (ldb +simd-pack-element-type+ header) +simd-pack-element-type-unsigned-byte+
+               (ldb +simd-pack-element-width+ header) 4))
+        ((int::type-equal element-type '(unsigned-byte 32))
+         (setf (ldb +simd-pack-element-type+ header) +simd-pack-element-type-unsigned-byte+
+               (ldb +simd-pack-element-width+ header) 5))
+        ((int::type-equal element-type '(unsigned-byte 64))
+         (setf (ldb +simd-pack-element-type+ header) +simd-pack-element-type-unsigned-byte+
+               (ldb +simd-pack-element-width+ header) 6))
+        ((int::type-equal element-type '(signed-byte 8))
+         (setf (ldb +simd-pack-element-type+ header) +simd-pack-element-type-signed-byte+
+               (ldb +simd-pack-element-width+ header) 3))
+        ((int::type-equal element-type '(signed-byte 16))
+         (setf (ldb +simd-pack-element-type+ header) +simd-pack-element-type-signed-byte+
+               (ldb +simd-pack-element-width+ header) 4))
+        ((int::type-equal element-type '(signed-byte 32))
+         (setf (ldb +simd-pack-element-type+ header) +simd-pack-element-type-signed-byte+
+               (ldb +simd-pack-element-width+ header) 5))
+        ((int::type-equal element-type '(signed-byte 64))
+         (setf (ldb +simd-pack-element-type+ header) +simd-pack-element-type-signed-byte+
+               (ldb +simd-pack-element-width+ header) 6))
         ((and (consp element-type)
               (eql (car element-type) 'unsigned-byte)
               (consp (cdr element-type))
@@ -117,7 +141,7 @@
               (t
                ;; Both known.
                `(and (simd-pack-p ,object)
-                     (eql (int::%object-header-data object) ,reference-header)))))))
+                     (eql (int::%object-header-data ,object) ,reference-header)))))))
 
   (int::%define-type-symbol 'simd-pack 'simd-pack-p)
   (int::%define-compound-type 'simd-pack 'simd-pack-type-p)
