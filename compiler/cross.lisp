@@ -82,6 +82,7 @@
            :dpb
            :mask-field
            :subtypep
+           :typep
            :upgraded-array-element-type
            :namestring
            :defpackage
@@ -150,11 +151,11 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
 (defun loose-constant-equal (x y)
   (or (eql x y)
-      (and (typep x 'byte)
-           (typep y 'byte)
+      (and (cl:typep x 'byte)
+           (cl:typep y 'byte)
            (equalp x y))
-      (and (typep x 'cross-short-float)
-           (typep y 'cross-short-float)
+      (and (cl:typep x 'cross-short-float)
+           (cl:typep y 'cross-short-float)
            (eql (cross-short-float-value x)
                 (cross-short-float-value y)))))
 )

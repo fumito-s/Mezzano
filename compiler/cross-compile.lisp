@@ -1335,3 +1335,22 @@ This should only fill in the START- slots and ignore the END- slots.")
 
 (defun short-float-p (object)
   (cross-support::cross-short-float-p object))
+
+;; Because we have some deftype aliases in play, they need to be expanded
+;; before being passed to the host's typep. The alternative would be hooking
+;; %DEFTYPE and registering them with the host at definition time.
+(defun typep (object type)
+  (if (symbolp type)
+      (let* ((type-info (and (boundp '*type-info*)
+                             (gethash type *type-info*)))
+             (type-expander (and type-info
+                                 ;; type-info-type-expander
+                                 (aref (cross-support::cross-struct-data type-info)
+                                       3))))
+        (if type-expander
+            (typep object (funcall type-expander (if (listp type) type (list type)) nil))
+            (cl:typep object type)))
+      (cl:typep object type)))
+
+(defun mezzano.internals.numbers.logical::bytep (x)
+  (cl:typep x 'cross-support::byte))

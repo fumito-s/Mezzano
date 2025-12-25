@@ -706,69 +706,6 @@
            #:simd-pack-element-count
            #:simd-pack-element))
 
-(defpackage :mezzano.simd.arm64
-  (:use :cl)
-  (:local-nicknames (:int :mezzano.internals)
-                    (:simd :mezzano.simd)
-                    (:a64 :mezzano.lap.arm64)
-                    (:c :mezzano.compiler)
-                    (:c.a64 :mezzano.compiler.backend.arm64))
-  (:export
-   ;; f32x4 vectors
-   #:f32
-   #:f32.4
-   #:f32.4!
-   #:make-f32.4
-   #:f32.4-broadcast
-   #:f32.4+
-   #:f32.4-
-   ;; f64x2 vectors
-   #:f64
-   #:f64.2
-   #:f64.2!
-   #:make-f64.2
-   #:f64.2-broadcast
-   #:f64.2+
-   #:f64.2-
-   ;; u8x16 vectors
-   #:u8
-   #:u8.16
-   #:u8.16!
-   #:make-u8.16
-   #:u8.16-broadcast
-   #:u8.16-dup
-   #:u8.16-not
-   #:u8.16+
-   #:u8.16+-saturating
-   #:u8.16*-long
-   #:u8.16*-long-hi
-   #:u8.16-from-u16.8
-   #:u8.16-from-u16.8-hi
-   ;; u16x8 vectors
-   #:u16
-   #:u16.8
-   #:u16.8!
-   #:make-u16.8
-   #:u16.8-broadcast
-   #:u16.8-dup
-   #:u16.8-not
-   #:u16.8+
-   #:u16.8+-saturating
-   #:u16.8-
-   #:u16.8*-long
-   #:u16.8*-long-hi
-   #:u16.8-from-u32.4
-   #:u16.8-from-u32.4-hi
-   ;; u32x4 vectors
-   #:u32
-   #:u32.4
-   #:u32.4!
-   #:make-u32.4
-   #:u32.4-broadcast
-   #:u32.4-dup
-   #:u32.4-lane-extract
-   #:u32.4-shiftr))
-
 (defpackage :mezzano.simd.x86-64
   (:use :cl)
   (:local-nicknames (:lap :mezzano.lap.x86)
@@ -1063,6 +1000,69 @@
                     (:ra :mezzano.compiler.backend.register-allocator)
                     (:c :mezzano.compiler)
                     (:sys.int :mezzano.internals)))
+
+(defpackage :mezzano.simd.arm64
+  (:use :cl)
+  (:local-nicknames (:int :mezzano.internals)
+                    (:simd :mezzano.simd)
+                    (:a64 :mezzano.lap.arm64)
+                    (:c :mezzano.compiler)
+                    (:c.a64 :mezzano.compiler.backend.arm64))
+  (:export
+   ;; f32x4 vectors
+   #:f32
+   #:f32.4
+   #:f32.4!
+   #:make-f32.4
+   #:f32.4-broadcast
+   #:f32.4+
+   #:f32.4-
+   ;; f64x2 vectors
+   #:f64
+   #:f64.2
+   #:f64.2!
+   #:make-f64.2
+   #:f64.2-broadcast
+   #:f64.2+
+   #:f64.2-
+   ;; u8x16 vectors
+   #:u8
+   #:u8.16
+   #:u8.16!
+   #:make-u8.16
+   #:u8.16-broadcast
+   #:u8.16-dup
+   #:u8.16-not
+   #:u8.16+
+   #:u8.16+-saturating
+   #:u8.16*-long
+   #:u8.16*-long-hi
+   #:u8.16-from-u16.8
+   #:u8.16-from-u16.8-hi
+   ;; u16x8 vectors
+   #:u16
+   #:u16.8
+   #:u16.8!
+   #:make-u16.8
+   #:u16.8-broadcast
+   #:u16.8-dup
+   #:u16.8-not
+   #:u16.8+
+   #:u16.8+-saturating
+   #:u16.8-
+   #:u16.8*-long
+   #:u16.8*-long-hi
+   #:u16.8-from-u32.4
+   #:u16.8-from-u32.4-hi
+   ;; u32x4 vectors
+   #:u32
+   #:u32.4
+   #:u32.4!
+   #:make-u32.4
+   #:u32.4-broadcast
+   #:u32.4-dup
+   #:u32.4-lane-extract
+   #:u32.4-shiftr))
 
 (defpackage :mezzano.delimited-continuations
   (:use :cl)

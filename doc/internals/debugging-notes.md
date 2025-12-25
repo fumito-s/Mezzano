@@ -9,6 +9,10 @@ Not actually a diassembly, it's the input to the assembler. Not a round-trip thr
   (mezzano.compiler::compile-lambda '<lambda-to-disassemble>))
 ```
 
+## Tracing optimizer transforms
+
+Bind `mezzano.compiler::*report-after-optimize-passes*`
+
 ## Loading up the gdb tools (aarch64)
 
 1. Start qemu with the `-s -S` options (one starts the gdb stub, the other starts stopped)
