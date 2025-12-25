@@ -344,4 +344,8 @@
         ((not (logbitp 0 value))
          (values (ash (sys.int::sign-extend value width) -1) t))
         ((eql (logand value 15) sys.int::+tag-immediate+)
-         (values (sys.int::%%assemble-value value 0) t))))
+         (let ((imm (sys.int::%%assemble-value value 0)))
+           (if (and (characterp imm)
+                    (> (char-code imm) #x0010FFFF))
+               nil
+               (values imm t))))))

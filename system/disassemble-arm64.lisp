@@ -576,10 +576,275 @@
                                ,(decode-fp (ldb +rn+ word) type)
                                ,(decode-fp (ldb +rm+ word) type)))))
 
+(defun dup-element-scalar (context word)
+  (declare (ignore context))
+  (let ((imm5 (ldb (byte 5 16) word)))
+    (multiple-value-bind (type shift)
+        (cond ((logbitp 0 imm5) (values :b 1))
+              ((logbitp 1 imm5) (values :h 2))
+              ((logbitp 2 imm5) (values :s 3))
+              ((logbitp 3 imm5) (values :d 4)))
+      (make-instance 'arm64-instruction
+                     :opcode 'a64:dup.v
+                     :operands `(,type
+                                 ,(decode-fp (ldb +rd+ word) type)
+                                 ,(decode-fp (ldb +rn+ word) :q)
+                                 ,(ash imm5 (- shift)))))))
+
+(defun dup-element-vector (context word)
+  (declare (ignore context))
+  (let ((imm5 (ldb (byte 5 16) word))
+        (q (logbitp 30 word)))
+    (multiple-value-bind (type shift)
+        (cond ((logbitp 0 imm5) (values (if q :16b :8b) 1))
+              ((logbitp 1 imm5) (values (if q :8h :4h) 2))
+              ((logbitp 2 imm5) (values (if q :4s :2s) 3))
+              ((logbitp 3 imm5) (values (if q :2d :1d) 4)))
+      (make-instance 'arm64-instruction
+                     :opcode 'a64:dup.v
+                     :operands `(,type
+                                 ,(decode-fp (ldb +rd+ word) :q)
+                                 ,(decode-fp (ldb +rn+ word) :q)
+                                 ,(ash imm5 (- shift)))))))
+
+(defun dup-general (context word)
+  (declare (ignore context))
+  (let* ((imm5 (ldb (byte 5 16) word))
+         (q (logbitp 30 word))
+         (type (cond ((logbitp 0 imm5) (if q :16b :8b))
+                     ((logbitp 1 imm5) (if q :8h :4h))
+                     ((logbitp 2 imm5) (if q :4s :2s))
+                     ((logbitp 3 imm5) (if q :2d :1d)))))
+    (make-instance 'arm64-instruction
+                   :opcode 'a64:dup.v
+                   :operands `(,type
+                               ,(decode-fp (ldb +rd+ word) :q)
+                               ,(decode-gp (ldb +rn+ word) :sf (if (eql (logand imm5 #b01111)
+                                                                        #b01000)
+                                                                   1 0))))))
+
+(defun umov (context word)
+  (declare (ignore context))
+  (let* ((imm5 (ldb (byte 5 16) word))
+         (q (logbitp 30 word)))
+    (declare (ignore q))
+    (multiple-value-bind (type shift)
+        (cond ((logbitp 0 imm5) (values :b 1))
+              ((logbitp 1 imm5) (values :h 2))
+              ((logbitp 2 imm5) (values :s 3))
+              ((logbitp 3 imm5) (values :d 4)))
+      (make-instance 'arm64-instruction
+                     :opcode 'a64:umov.v
+                     :operands `(,type
+                                 ,(decode-gp (ldb +rd+ word) :sf (if (eql (logand imm5 #b01111)
+                                                                          #b01000)
+                                                                     1 0))
+                                 ,(decode-fp (ldb +rn+ word) :q)
+                                 ,(ash imm5 (- shift)))))))
+
+(defun smov (context word)
+  (declare (ignore context))
+  (let* ((imm5 (ldb (byte 5 16) word))
+         (q (logbitp 30 word)))
+    (declare (ignore q))
+    (multiple-value-bind (type shift)
+        (cond ((logbitp 0 imm5) (values :b 1))
+              ((logbitp 1 imm5) (values :h 2))
+              ((logbitp 2 imm5) (values :s 3))
+              ((logbitp 3 imm5) (values :d 4)))
+      (make-instance 'arm64-instruction
+                     :opcode 'a64:umov.v
+                     :operands `(,type
+                                 ,(decode-gp (ldb +rd+ word) :sf (if (eql (logand imm5 #b01111)
+                                                                          #b01000)
+                                                                     1 0))
+                                 ,(decode-fp (ldb +rn+ word) :q)
+                                 ,(ash imm5 (- shift)))))))
+
+(defun floating-point-data-processing-1-source (context word)
+  (declare (ignore context))
+  (let ((type (ldb (byte 2 22) word))
+        (opcode (and (zerop (mask-field (byte 2 19) word))
+                     (aref #(a64:fmov
+                             :fabs
+                             :fneg
+                             a64:fsqrt
+                             nil
+                             a64:fcvt
+                             nil
+                             nil
+                             :frintn
+                             :frintp
+                             :frintm
+                             :frintz
+                             :frinta
+                             nil
+                             :frintx
+                             :frinti)
+                           (ldb (byte 4 15) word)))))
+    (cond ((eql opcode 'a64:fcvt)
+           (make-instance 'arm64-instruction
+                          :opcode opcode
+                          :operands `(,(decode-fp (ldb +rd+ word) (ldb (byte 2 15) word))
+                                      ,(decode-fp (ldb +rn+ word) type))))
+          (t
+           (make-instance 'arm64-instruction
+                          :opcode opcode
+                          :operands `(,(decode-fp (ldb +rd+ word) type)
+                                      ,(decode-fp (ldb +rn+ word) type)))))))
+
+(defun advsimd-3-same (context word)
+  (declare (ignore context))
+  (let* ((q (logbitp 30 word))
+         (u (logbitp 29 word))
+         (size (ldb (byte 2 22) word))
+         (opcode (ldb (byte 5 11) word))
+         (oper (if u
+                   (case opcode
+                     (#b00001 'a64:uqadd.v)
+                     (#b10000 'a64:sub.v))
+                   (case opcode
+                     (#b00001 'a64:sqadd.v)
+                     (#b10000 'a64:add.v)
+                     (#b11010 (if (logbitp 1 size) 'a64:fsub.v 'a64:fadd.v)))))
+         (alt-size (member oper '(a64:fsub.v a64:fadd.v))))
+    (if oper
+        (make-instance 'arm64-instruction
+                       :opcode oper
+                       :operands `(,(decode-fp (ldb +rd+ word) :q)
+                                   ,(decode-fp (ldb +rn+ word) :q)
+                                   ,(decode-fp (ldb +rm+ word) :q)
+                                   ,(if alt-size
+                                        (if q
+                                            (if (logbitp 0 size) :2d :4s)
+                                            (if (logbitp 0 size) :1d :2s))
+                                        (if q
+                                            (aref #(:16b :8h :4s :2d) size)
+                                            (aref #(:8b :4h :2s :1d) size)))))
+        (values nil :advsimd-3-same))))
+
+(defun advsimd-3-different (context word)
+  (declare (ignore context))
+  (let* ((q (logbitp 30 word))
+         (u (logbitp 29 word))
+         (size (ldb (byte 2 22) word))
+         (opcode (ldb (byte 4 12) word))
+         (oper (if u
+                   (case opcode
+                     (#b1100 (if q 'a64:umull2.v 'a64:umull.v)))
+                   nil)))
+    (if oper
+        (make-instance 'arm64-instruction
+                       :opcode oper
+                       :operands `(,(decode-fp (ldb +rd+ word) :q)
+                                   ,(decode-fp (ldb +rn+ word) :q)
+                                   ,(decode-fp (ldb +rm+ word) :q)
+                                   ,(if q
+                                        (aref #(:16b :8h :4s :2d) size)
+                                        (aref #(:8b :4h :2s :1d) size))))
+        (values nil :advsimd-3-same))))
+
+(defun advsimd-two-register-misc (context word)
+  (declare (ignore context))
+  (let* ((q (logbitp 30 word))
+         (u (logbitp 29 word))
+         (size (ldb (byte 2 22) word))
+         (opcode (ldb (byte 5 12) word))
+         (oper (if u
+                   (case opcode
+                     (#b00101 (if (zerop size) 'a64:not.v)))
+                   (case opcode
+                     (#b10010 (if q 'a64:xtn2.v 'a64:xtn.v))))))
+    (if oper
+        (make-instance 'arm64-instruction
+                       :opcode oper
+                       :operands `(,(decode-fp (ldb +rd+ word) :q)
+                                   ,(decode-fp (ldb +rn+ word) :q)
+                                   ,(cond
+                                      ((eql oper 'a64:not.v) (if q :16b :8b))
+                                      (t (if q
+                                             (aref #(:16b :8h :4s :2d) size)
+                                             (aref #(:8b :4h :2s :1d) size))))))
+        (values nil :advsimd-two-register-misc))))
+
+(defun advsimd-shift-by-immediate (context word)
+  (declare (ignore context))
+  (let* ((q (logbitp 30 word))
+         (u (logbitp 29 word))
+         (immh (ldb (byte 4 19) word))
+         (immb (ldb (byte 3 16) word))
+         (opcode (ldb (byte 5 11) word))
+         (size (cond ((logbitp 3 immh) (if q :2d :1d))
+                     ((logbitp 2 immh) (if q :4s :2s))
+                     ((logbitp 1 immh) (if q :8h :4h))
+                     ((logbitp 0 immh) (if q :16b :8b))))
+         (esize (cond ((logbitp 3 immh) 64)
+                      ((logbitp 2 immh) 32)
+                      ((logbitp 1 immh) 16)
+                      ((logbitp 0 immh) 8)))
+         (shift (- (* esize 2)
+                   (logior (ash immh 3)
+                           immb)))
+         (oper (if u
+                   (case opcode
+                     (#b00000 'a64:ushr.v))
+                   (case opcode
+                     (#b00000 'a64:sshr.v)))))
+    (if oper
+        (make-instance 'arm64-instruction
+                       :opcode oper
+                       :operands `(,(decode-fp (ldb +rd+ word) :q)
+                                   ,(decode-fp (ldb +rn+ word) :q)
+                                   ,shift
+                                   ,size))
+        (values nil :advsimd-shift-by-immediate))))
+
+(defun advsimd-modified-immediate (context word)
+  (declare (ignore context))
+  (let ((q (logbitp 30 word))
+        (op (logbitp 29 word))
+        (imm (logior (ash (ldb (byte 3 16) word) 5)
+                     (ldb (byte 5 5) word)))
+        (cmode (ldb (byte 4 12) word)))
+    (cond ((and (not op)
+                (eql (logand cmode #b1001) #b0000))
+           (make-instance 'arm64-instruction
+                          :opcode 'a64:movi.v
+                          :operands `(,(if q :4s :2s)
+                                      ,(decode-fp (ldb +rd+ word) :q)
+                                      ,imm
+                                      :lsl
+                                      ,(* (ldb (byte 2 1) cmode) 8))))
+          ((and (not op)
+                (eql (logand cmode #b1101) #b1000))
+           (make-instance 'arm64-instruction
+                          :opcode 'a64:movi.v
+                          :operands `(,(if q :8h :4h)
+                                      ,(decode-fp (ldb +rd+ word) :q)
+                                      ,imm
+                                      :lsl
+                                      ,(* (ldb (byte 1 1) cmode) 8))))
+          ((and (not op)
+                (eql (logand cmode #b1110) #b1100))
+           (make-instance 'arm64-instruction
+                          :opcode 'a64:movi.v
+                          :operands `(,(if q :4s :2s)
+                                      ,(decode-fp (ldb +rd+ word) :q)
+                                      ,imm
+                                      :msl
+                                      ,(* (1+ (ldb (byte 1 0) cmode)) 8))))
+          ((and (not op)
+                (eql (logand cmode #b1111) #b1110))
+           (make-instance 'arm64-instruction
+                          :opcode 'a64:movi.v
+                          :operands `(,(if q :16b :8b)
+                                      ,(decode-fp (ldb +rd+ word) :q)
+                                      ,imm)))
+          (t
+           (values nil :advsimd-modified-immediate)))))
+
 (defun data-processing-simd (context word)
   (cond
-    ((eql (logand word #xFF3FFC00) #x1E204000)
-     (fmov-register context word))
     ((eql (logand word #xFF20FC17) #x1E202000)
      (let ((type (ldb (byte 2 22) word)))
        (make-instance 'arm64-instruction
@@ -590,6 +855,29 @@
      (conversions-between-floating-point-and-integer context word))
     ((eql (logand word #xFFA00C00) #x1E200800)
      (floating-point-data-processing-2-source context word))
+    ((eql (logand word #xFFE0FC00) #x5E000400)
+     (dup-element-scalar context word))
+    ((eql (logand word #xBFE0FC00) #x0E000400)
+     (dup-element-vector context word))
+    ((eql (logand word #xBFE0FC00) #x0E000C00)
+     (dup-general context word))
+    ((eql (logand word #xBFE0FC00) #x0E003C00)
+     (umov context word))
+    ((eql (logand word #xBFE0FC00) #x0E002C00)
+     (umov context word))
+    ((eql (logand word #xFF207C00) #x1E204000)
+     (floating-point-data-processing-1-source context word))
+    ((eql (logand word #x9F200400) #x0E200400)
+     (advsimd-3-same context word))
+    ((eql (logand word #x9F200C00) #x0E200000)
+     (advsimd-3-different context word))
+    ((eql (logand word #x9F3E0C00) #x0E200800)
+     (advsimd-two-register-misc context word))
+    ((and (eql (logand word #x9F800400) #x0F000400)
+          (not (zerop (ldb (byte 4 19) word))))
+     (advsimd-shift-by-immediate context word))
+    ((eql (logand word #x9F080C00) #x0F000400)
+     (advsimd-modified-immediate context word))
     (t
      (values nil :data-processing-simd))))
 
@@ -997,6 +1285,36 @@
                                         (ash (dis:code-byte function i) (* shift 8))))
                 finally (return result)))))
 
+(defun decode-movi-immediate (operands)
+  (destructuring-bind (type dst imm &optional (shift :lsl) (amount 0))
+      operands
+    (declare (ignore dst))
+    (let ((modified-imm
+            (if (member type '(:2d :1d))
+                (loop with result = 0
+                      for i below 8
+                      when (logbitp i imm)
+                        do (setf result (logior result (ash #xFF (* i 8))))
+                      finally (return result))
+                (ecase shift
+                  (:lsl (ash imm amount))
+                  (:msl (logior (ash imm amount)
+                                (1- (ash 1 amount))))))))
+      (multiple-value-bind (count width)
+          (ecase type
+            (:8b  (values 8  8))
+            (:16b (values 16 8))
+            (:4h  (values 4  16))
+            (:8h  (values 8  16))
+            (:2s  (values 2  32))
+            (:4s  (values 4  32))
+            (:1d  (values 1  64))
+            (:2d  (values 2  64)))
+        (loop with result = modified-imm
+              repeat (1- count)
+              do (setf result (logior (ash result width) modified-imm))
+              finally (return result))))))
+
 (defmethod dis:print-instruction ((context arm64-disassembler-context) instruction
                                   &key (print-annotations t) (print-labels t))
   (let ((annotations '()))
@@ -1077,7 +1395,10 @@
                         (push "car" annotations))
                       (when (eql (second operand) (+ (- int::+tag-cons+) 8))
                         (push "cdr" annotations)))
-                    (format t "~S" operand))))))
+                    (format t "~S" operand))))
+           (when (eql (inst-opcode instruction) 'a64:movi.v)
+             (push (format nil "#x~32,'0X" (decode-movi-immediate (inst-operands instruction)))
+                   annotations))))
     (format t ")")
     (when (and print-annotations annotations)
       (format t "~85T; ~A" (pop annotations))

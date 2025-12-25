@@ -256,5 +256,110 @@
 (defmethod ir:perform-target-lowering (backend-function (target c:arm64-target))
   (lower-builtins backend-function))
 
+(defun code-for-direct-vector-imm (dst value)
+  ;; We've got a few options here.
+  ;; movi can produce 1, 2, or 4 byte constants with one of the values
+  ;; filled in with an imm8. The other option is an 8 byte constant
+  ;; where each byte is populated from a single bit in the source imm8.
+  (let ((qwordp (= (ldb (byte 64   0) value) (ldb (byte 64  64) value)))
+        ;; True when all :s lanes are identical
+        (dwordp (= (ldb (byte 32   0) value) (ldb (byte 32  32) value)
+                   (ldb (byte 32  64) value) (ldb (byte 32  96) value)))
+        ;; True when all :h lanes are identical
+        (wordp  (= (ldb (byte 16   0) value) (ldb (byte 16  16) value)
+                   (ldb (byte 16  32) value) (ldb (byte 16  48) value)
+                   (ldb (byte 16  64) value) (ldb (byte 16  80) value)
+                   (ldb (byte 16  96) value) (ldb (byte 16 112) value)))
+        ;; True when all :b lanes are identical
+        (bytep  (= (ldb (byte  8   0) value) (ldb (byte  8   8) value)
+                   (ldb (byte  8  16) value) (ldb (byte  8  24) value)
+                   (ldb (byte  8  32) value) (ldb (byte  8  40) value)
+                   (ldb (byte  8  48) value) (ldb (byte  8  56) value)
+                   (ldb (byte  8  64) value) (ldb (byte  8  72) value)
+                   (ldb (byte  8  80) value) (ldb (byte  8  88) value)
+                   (ldb (byte  8  96) value) (ldb (byte  8 104) value)
+                   (ldb (byte  8 112) value) (ldb (byte  8 120) value))))
+    (cond
+      ;; dword
+      ;; TODO: There are more possible variants with the :MSL shift type,
+      ;; and also mvni
+      ((and dwordp
+            (zerop (dpb 0 (byte 8 0) (ldb (byte 32 0) value))))
+       `(lap:movi.v :4s ,dst ,(ldb (byte 8 0) value) :lsl 0))
+      ((and dwordp
+            (zerop (dpb 0 (byte 8 8) (ldb (byte 32 0) value))))
+       `(lap:movi.v :4s ,dst ,(ldb (byte 8 8) value) :lsl 8))
+      ((and dwordp
+            (zerop (dpb 0 (byte 8 16) (ldb (byte 32 0) value))))
+       `(lap:movi.v :4s ,dst ,(ldb (byte 8 16) value) :lsl 16))
+      ((and dwordp
+             (zerop (dpb 0 (byte 8 24) (ldb (byte 32 0) value))))
+       `(lap:movi.v :4s ,dst ,(ldb (byte 8 24) value) :lsl 24))
+       ;; word
+       ((and wordp
+             (zerop (dpb 0 (byte 8 0) (ldb (byte 16 0) value))))
+        `(lap:movi.v :8h ,dst ,(ldb (byte 8 0) value) :lsl 0))
+       ((and wordp
+             (zerop (dpb 0 (byte 8 8) (ldb (byte 16 0) value))))
+        `(lap:movi.v :8h ,dst ,(ldb (byte 8 8) value) :lsl 8))
+       ;; byte
+       (bytep
+        `(lap:movi.v :16b ,dst ,(ldb (byte 8 0) value)))
+       ;; qword
+       ((and qwordp
+             (member (ldb (byte 8 0) value) '(0 #xFF))
+             (member (ldb (byte 8 8) value) '(0 #xFF))
+             (member (ldb (byte 8 16) value) '(0 #xFF))
+             (member (ldb (byte 8 24) value) '(0 #xFF))
+             (member (ldb (byte 8 32) value) '(0 #xFF))
+             (member (ldb (byte 8 40) value) '(0 #xFF))
+             (member (ldb (byte 8 48) value) '(0 #xFF))
+             (member (ldb (byte 8 56) value) '(0 #xFF)))
+        `(lap:movi.v :2d ,dst
+                     ,(logior (ldb (byte 1 0) value)
+                              (ash (ldb (byte 1 8) value) 1)
+                              (ash (ldb (byte 1 16) value) 2)
+                              (ash (ldb (byte 1 24) value) 3)
+                              (ash (ldb (byte 1 32) value) 4)
+                              (ash (ldb (byte 1 40) value) 5)
+                              (ash (ldb (byte 1 48) value) 6)
+                              (ash (ldb (byte 1 56) value) 7)))))))
+
+(defun lower-vector-loads (backend-function)
+  (multiple-value-bind (uses defs)
+      (ir::build-use/def-maps backend-function)
+    (declare (ignore uses))
+    (do* ((inst (ir:first-instruction backend-function) next-inst)
+          (next-inst (ir:next-instruction backend-function inst)
+                     (if inst
+                         (ir:next-instruction backend-function inst)
+                         nil)))
+         ((null inst))
+      ;; Look for simd unbox instructions unboxing a constant vector object.
+      (when (and (typep inst 'unbox-advsimd-instruction)
+                 (null (rest (gethash (ir:unbox-source inst) defs)))
+                 (typep (first (gethash (ir:unbox-source inst) defs)) 'ir:constant-instruction)
+                 (typep (ir:constant-value (first (gethash (ir:unbox-source inst) defs)))
+                        'mezzano.simd.arm64::advsimd-pack))
+        ;; Read the whole pack as a single value.
+        (let* ((value (mezzano.simd:simd-pack-element
+                       (mezzano.simd:transmute-simd-pack
+                        (ir:constant-value (first (gethash (ir:unbox-source inst) defs)))
+                        '(unsigned-byte 128) 1)
+                       0))
+               (direct-code (code-for-direct-vector-imm
+                             (ir:unbox-destination inst)
+                             value)))
+          (when direct-code
+            (change-class inst 'arm64-instruction
+                          :opcode (first direct-code)
+                          :operands (rest direct-code)
+                          :inputs '()
+                          :outputs (list (ir:unbox-destination inst))
+                          :clobbers '()
+                          :early-clobber nil
+                          :prefix nil)))))))
+
 (defmethod ir:perform-target-lowering-post-ssa (backend-function (target c:arm64-target))
+  (lower-vector-loads backend-function)
   (lower-complicated-box-instructions backend-function))

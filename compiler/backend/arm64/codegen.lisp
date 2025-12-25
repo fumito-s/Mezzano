@@ -119,9 +119,9 @@
   (cond ((keywordp value)
          (emit `(lap:ldr ,dest ,(fetch-literal/128 value))))
         ((zerop value)
-         (list `(lap:orr ,dest :xzr :xzr)))
+         (emit `(lap:orr ,dest :xzr :xzr)))
         ((<= 0 value 65535)
-         (list `(lap:movz ,dest ,value)))
+         (emit `(lap:movz ,dest ,value)))
         (t
          (emit `(lap:ldr ,dest ,(fetch-literal/128 value))))))
 
