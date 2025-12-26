@@ -337,3 +337,9 @@ of the new simd-pack must be the same as the old simd-pack."
       (setf (int::%object-ref-unsigned-byte-64 new-pack i)
             (int::%object-ref-unsigned-byte-64 simd-pack i)))
     new-pack))
+
+(defmethod make-load-form ((object simd-pack) &optional environment)
+  (declare (ignore environment))
+  `(make-simd-pack ',(simd-pack-element-type object)
+                   ,@(loop for i below (simd-pack-element-count object)
+                           collect (simd-pack-element object i))))
