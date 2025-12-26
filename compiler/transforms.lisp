@@ -4,13 +4,21 @@
 
 (in-package :mezzano.compiler)
 
+(defvar *propagated-type-definitions*)
+
 (defun apply-transforms (lambda target-architecture)
-  (apply-transforms-1 lambda target-architecture))
+  (let ((*propagated-type-definitions* '()))
+    (apply-transforms-1 lambda target-architecture)))
 
 (defgeneric apply-transforms-1 (form target-architecture))
 
 (defmethod apply-transforms-1 ((form lexical-variable) target-architecture)
-  form)
+  (let ((updated (assoc form *propagated-type-definitions*)))
+    (cond (updated
+           (change-made)
+           (ast `(the ,(cdr updated) ,form) form))
+          (t
+           form))))
 
 (defmethod apply-transforms-1 ((form lambda-information) target-architecture)
   (let ((*current-lambda* form))
@@ -62,8 +70,20 @@
   form)
 
 (defmethod apply-transforms-1 ((form ast-multiple-value-bind) target-architecture)
-  (setf (value-form form) (apply-transforms-1 (value-form form) target-architecture)
-        (body form) (apply-transforms-1 (body form) target-architecture))
+  (let ((old-value-form (value-form form)))
+    (setf (value-form form) (apply-transforms-1 (value-form form) target-architecture))
+    (when (and (not (eql old-value-form (value-form form)))
+               (typep (value-form form) 'ast-the))
+      ;; Try to propagate the new types forward.
+      (let ((types (if (and (listp (ast-the-type (value-form form)))
+                            (eql (car (ast-the-type (value-form form))) 'values))
+                       (cdr (ast-the-type (value-form form)))
+                       (ast-the-type (value-form form)))))
+        (loop for ty in types
+              for var in (ast-bindings form)
+              when (lexical-variable-p var)
+                do (push (cons var ty) *propagated-type-definitions*))))
+    (setf (body form) (apply-transforms-1 (body form) target-architecture)))
   form)
 
 (defmethod apply-transforms-1 ((form ast-multiple-value-call) target-architecture)
@@ -103,20 +123,28 @@
   form)
 
 (defmethod apply-transforms-1 ((form ast-the) target-architecture)
-  (cond ((typep (value form) 'ast-call)
-         (let* ((matching-transform (match-transform (value form) (the-type form) target-architecture))
-                (new-form (if matching-transform
-                              (apply-transform matching-transform
-                                               (arguments (value form))
-                                               (value form))
-                              nil)))
-           (cond (new-form
-                  (change-made)
-                  (setf (value form) new-form))
-                 (t
-                  (setf (value form) (apply-transforms-1 (value form) target-architecture))))))
-        (t
-         (setf (value form) (apply-transforms-1 (value form) target-architecture))))
+  (typecase (value form)
+    (ast-call
+     (let* ((matching-transform (match-transform (value form) (the-type form) target-architecture))
+            (new-form (if matching-transform
+                          (apply-transform matching-transform
+                                           (arguments (value form))
+                                           (value form))
+                          nil)))
+       (cond (new-form
+              (change-made)
+              (setf (value form) new-form))
+             (t
+              (setf (value form) (apply-transforms-1 (value form) target-architecture))))))
+    (lexical-variable
+     (let ((updated (assoc (value form) *propagated-type-definitions*)))
+       (when updated
+         (change-made)
+         (setf (the-type form)
+               (merge-the-types (the-type form)
+                                (cdr updated))))))
+    (otherwise
+     (setf (value form) (apply-transforms-1 (value form) target-architecture))))
   form)
 
 (defmethod apply-transforms-1 ((form ast-unwind-protect) target-architecture)
