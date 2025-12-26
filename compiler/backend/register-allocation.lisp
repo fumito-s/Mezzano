@@ -1114,7 +1114,7 @@ Returns the interference graph and the set of spilled virtual registers."
                    (progn
                      ;; SSE slots are 2 wide.
                      ;; TODO: Force 16-byte alignment.
-                     (when (eql (ir:virtual-register-kind vreg) :sse)
+                     (when (member (ir:virtual-register-kind vreg) '(:sse :advsimd))
                        (vector-push-extend (list vreg-id) slots)
                        (vector-push-extend :pad slot-classes))
                      (setf (gethash vreg locations) (length slots))
