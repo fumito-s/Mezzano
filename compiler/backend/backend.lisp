@@ -212,6 +212,7 @@
        (incf total (unbox-phis backend-function))
        (incf total (unbox-debug-values backend-function))
        (incf total (eliminate-redundant-boxing backend-function))
+       (incf total (scalarize-values backend-function))
        (incf total (remove-unused-instructions backend-function))
        (incf total (remove-unused-phis backend-function))
        (when (zerop total)

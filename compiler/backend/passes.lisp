@@ -624,3 +624,31 @@ Must be performed after SSA conversion."
                           (dolist (child children)
                             (doit child info)))))))
         (doit (first-instruction function) '())))))
+
+;; A values instruction followed immediately by a m-v-b instruction can be
+;; turned directly into a set of move instructions, no values needed.
+(defun scalarize-values (backend-function)
+  (do* ((n-removed 0)
+        (inst (first-instruction backend-function) next-inst)
+        (next-inst (next-instruction backend-function inst)
+                   (if inst (next-instruction backend-function inst))))
+       ((null inst)
+        n-removed)
+    (when (and (typep inst 'multiple-value-bind-instruction)
+               (typep (prev-instruction backend-function inst) 'values-instruction))
+      (loop with values = (values-values (prev-instruction backend-function inst))
+            for var in (multiple-value-bind-values inst)
+            do
+               (cond (values
+                      (insert-after backend-function inst
+                                    (make-instance 'move-instruction
+                                                   :source (pop values)
+                                                   :destination var)))
+                     (t
+                      (insert-after backend-function inst
+                                    (make-instance 'constant-instruction
+                                                   :value nil
+                                                   :destination var)))))
+      (incf n-removed)
+      (remove-instruction backend-function (prev-instruction backend-function inst))
+      (remove-instruction backend-function inst))))
