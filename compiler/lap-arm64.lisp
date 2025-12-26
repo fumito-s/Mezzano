@@ -2338,6 +2338,40 @@
                               (ash (register-number rhs) +rm-shift+)))
     (return-from instruction t)))
 
+(define-instruction and.v (dst lhs rhs size)
+  (check-register-class dst :fp-128)
+  (check-register-class lhs :fp-128)
+  (check-register-class rhs :fp-128)
+  (let ((q (ecase size
+             (:8b  0)
+             (:16b 1))))
+    (emit-instruction (logior #x0E201C00
+                              (ash q 30)
+                              (ash (register-number dst) +rd-shift+)
+                              (ash (register-number lhs) +rn-shift+)
+                              (ash (register-number rhs) +rm-shift+)))
+    (return-from instruction t)))
+
+(define-instruction mul.v (dst lhs rhs size)
+  (check-register-class dst :fp-128)
+  (check-register-class lhs :fp-128)
+  (check-register-class rhs :fp-128)
+  (multiple-value-bind (sz q)
+      (ecase size
+        (:8b  (values #b00 0))
+        (:16b (values #b00 1))
+        (:4h  (values #b01 0))
+        (:8h  (values #b01 1))
+        (:2s  (values #b10 0))
+        (:4s  (values #b10 1)))
+    (emit-instruction (logior #x0E209C00
+                              (ash sz 22)
+                              (ash q 30)
+                              (ash (register-number dst) +rd-shift+)
+                              (ash (register-number lhs) +rn-shift+)
+                              (ash (register-number rhs) +rm-shift+)))
+    (return-from instruction t)))
+
 (define-instruction ushr.v (dst lhs count size)
   (check-register-class dst :fp-128)
   (check-register-class lhs :fp-128)
@@ -2400,9 +2434,9 @@
   (check-register-class lhs :fp-128)
   (let ((q 1)
         (sz (ecase size
-              (:8b #b00)
-              (:4h #b01)
-              (:2s #b10))))
+              (:16b #b00)
+              (:8h #b01)
+              (:4s #b10))))
     (emit-instruction (logior #x0E212800
                               (ash q 30)
                               (ash sz 22)

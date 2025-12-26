@@ -10,8 +10,10 @@
    (%operands :initarg :operands :reader arm64-instruction-operands)
    (%clobbers :initarg :clobbers :reader arm64-instruction-clobbers)
    (%early-clobber :initarg :early-clobber :reader arm64-instruction-early-clobber)
-   (%prefix :initarg :prefix :reader arm64-instruction-prefix))
-  (:default-initargs :clobbers '() :early-clobber nil :prefix nil))
+   (%prefix :initarg :prefix :reader arm64-instruction-prefix)
+   ;; When true, the input registers are moved to the output registers, to simulate a rmw instruction.
+   (%fake-3op :initarg :fake-3op :reader arm64-instruction-fake-3op))
+  (:default-initargs :clobbers '() :early-clobber nil :prefix nil :fake-3op nil))
 
 (defmethod ra:instruction-clobbers ((instruction arm64-instruction) (architecture c:arm64-target))
   (arm64-instruction-clobbers instruction))
@@ -358,8 +360,22 @@
                           :outputs (list (ir:unbox-destination inst))
                           :clobbers '()
                           :early-clobber nil
-                          :prefix nil)))))))
+                          :prefix nil
+                          :fake-3op nil)))))))
+
+(defun lower-fake-three-operand-instructions (backend-function)
+  (ir:do-instructions (inst backend-function)
+    (when (and (typep inst 'arm64-instruction)
+               (arm64-instruction-fake-3op inst))
+      ;; Insert moves from the inputs to the outputs.
+      (loop for input in (ir:instruction-inputs inst)
+            for output in (ir:instruction-outputs inst)
+            do (ir:insert-before backend-function inst
+                                 (make-instance 'ir:move-instruction
+                                                :source input
+                                                :destination output))))))
 
 (defmethod ir:perform-target-lowering-post-ssa (backend-function (target c:arm64-target))
   (lower-vector-loads backend-function)
-  (lower-complicated-box-instructions backend-function))
+  (lower-complicated-box-instructions backend-function)
+  (lower-fake-three-operand-instructions backend-function))

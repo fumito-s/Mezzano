@@ -707,22 +707,28 @@
                      (#b10000 'a64:sub.v))
                    (case opcode
                      (#b00001 'a64:sqadd.v)
+                     (#b00011 (case size
+                                (0 'a64:and.v)
+                                (2 'a64:orr.v)))
                      (#b10000 'a64:add.v)
-                     (#b11010 (if (logbitp 1 size) 'a64:fsub.v 'a64:fadd.v)))))
-         (alt-size (member oper '(a64:fsub.v a64:fadd.v))))
+                     (#b11010 (if (logbitp 1 size) 'a64:fsub.v 'a64:fadd.v))))))
     (if oper
         (make-instance 'arm64-instruction
                        :opcode oper
                        :operands `(,(decode-fp (ldb +rd+ word) :q)
                                    ,(decode-fp (ldb +rn+ word) :q)
                                    ,(decode-fp (ldb +rm+ word) :q)
-                                   ,(if alt-size
-                                        (if q
-                                            (if (logbitp 0 size) :2d :4s)
-                                            (if (logbitp 0 size) :1d :2s))
-                                        (if q
-                                            (aref #(:16b :8h :4s :2d) size)
-                                            (aref #(:8b :4h :2s :1d) size)))))
+                                   ,(cond
+                                      ((member oper '(a64:and.v a64:orr.v))
+                                       (if q :16b :8b))
+                                      ((member oper '(a64:fsub.v a64:fadd.v))
+                                       (if q
+                                           (if (logbitp 0 size) :2d :4s)
+                                           (if (logbitp 0 size) :1d :2s)))
+                                      (t
+                                       (if q
+                                           (aref #(:16b :8h :4s :2d) size)
+                                           (aref #(:8b :4h :2s :1d) size))))))
         (values nil :advsimd-3-same))))
 
 (defun advsimd-3-different (context word)

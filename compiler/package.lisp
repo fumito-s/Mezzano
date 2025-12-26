@@ -1062,6 +1062,8 @@
    #:u32.4-broadcast
    #:u32.4-dup
    #:u32.4-lane-extract
+   #:u32.4-and
+   #:u32.4*
    #:u32.4-shiftr
    #:u32.4-aref
    #:u32.4-row-major-aref))
