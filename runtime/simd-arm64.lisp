@@ -272,35 +272,43 @@
                              name
                              `(,ty ,name))))))))
 
-(defmacro %define-aref-transforms (aref row-major-aref %row-major-aref scalar-type vector-type n-lanes setter)
+(defmacro %define-aref-transforms (aref row-major-aref %row-major-aref scalar-type vector-type n-lanes count setter)
   "Generate wrapper functions and transforms to transform a call to aref/row-major-aref to the appropriate builtin."
-  `(progn
-     (defun ,aref (,@(when setter '(value)) array &rest subscripts)
-       ;; FIXME: Since we're loading N elements out of the array, we should check bounds
-       ;; on the last subscript.
-       (funcall ',row-major-aref ,@(when setter '(value)) array (apply #'array-row-major-index array subscripts)))
-     ;; TODO: Support arbitrary non-simple arrays.
-     (defun ,row-major-aref (,@(when setter '(value)) array index)
-       (check-type array (simple-array ,scalar-type *))
-       (assert (<= 0 index))
-       (assert (< (+ index ,n-lanes) (array-total-size array)))
-       (funcall ',%row-major-aref
-                ,@(when setter '(value))
-                (if (typep array '(simple-array * (*)))
-                    array ; 1D simple array
-                    ;; Otherwise fetch the underlying 1D storage array
-                    (int::%object-ref-t array 'int::+complex-array-storage+))
-                index))
-     ;; TODO: Support other non-1D arrays
-     ;; TODO: Broadcast scalar values.
-     (c::define-transform ,row-major-aref (,@(when setter `((value ,vector-type)))
-                                           (vector (simple-array ,scalar-type (*)) array-type)
-                                           (index fixnum index-type))
-         ((:optimize (= safety 0) (= speed 3)))
-       `(the ,',vector-type
-             (progn
-               ,(c::insert-bounds-check vector array-type index index-type :adjust ,(1- n-lanes))
-               (c::call ,',%row-major-aref ,,@(when setter '(value)) ,vector ,index))))))
+  (let ((values (when setter
+                  (if (eql count 1)
+                      '(values)
+                      (loop repeat count
+                            collect (gensym "VALUE"))))))
+    `(progn
+       (defun ,aref (,@values array &rest subscripts)
+         ;; FIXME: Since we're loading N elements out of the array, we should check bounds
+         ;; on the last subscript.
+         (funcall ',row-major-aref ,@values array (apply #'array-row-major-index array subscripts)))
+       ;; TODO: Support arbitrary non-simple arrays.
+       (defun ,row-major-aref (,@values array index)
+         (check-type array (simple-array ,scalar-type *))
+         (assert (<= 0 index))
+         (assert (<= (+ index ,(* n-lanes count)) (array-total-size array)))
+         (funcall ',%row-major-aref
+                  ,@values
+                  (if (typep array '(simple-array * (*)))
+                      array ; 1D simple array
+                      ;; Otherwise fetch the underlying 1D storage array
+                      (int::%object-ref-t array 'int::+complex-array-storage+))
+                  index))
+       ;; TODO: Support other non-1D arrays
+       ;; TODO: Broadcast scalar values when setting.
+       (c::define-transform ,row-major-aref (,@(loop for value in values
+                                                     collect (list value vector-type))
+                                             (vector (simple-array ,scalar-type (*)) array-type)
+                                             (index fixnum index-type))
+           ((:optimize (= safety 0) (= speed 3)))
+         `(the ,',(if (eql count 1)
+                      vector-type
+                      `(values ,@(loop repeat count collect vector-type)))
+               (progn
+                 ,(c::insert-bounds-check vector array-type index index-type :adjust ,(1- (* n-lanes count)))
+                 (c::call ,',%row-major-aref ,,@values ,vector ,index)))))))
 
 ;;; Generate aref accessors for the given type.
 
@@ -310,8 +318,8 @@
     `(progn
        (c::define-aref-transform ,aref ,row-major-aref ,scalar-type)
 
-       (%define-aref-transforms ,aref ,row-major-aref ,%row-major-aref ,scalar-type ,vector-type ,n-lanes nil)
-       (%define-aref-transforms (setf ,aref) (setf ,row-major-aref) (setf ,%row-major-aref) ,scalar-type ,vector-type ,n-lanes t)
+       (%define-aref-transforms ,aref ,row-major-aref ,%row-major-aref ,scalar-type ,vector-type ,n-lanes 1 nil)
+       (%define-aref-transforms (setf ,aref) (setf ,row-major-aref) (setf ,%row-major-aref) ,scalar-type ,vector-type ,n-lanes 1 t)
 
        (c.a64::define-builtin ,%row-major-aref ((array index) result
                                                 :has-wrapper nil)

@@ -234,7 +234,7 @@
           (docstring (nth-value 2 (parse-declares body :permit-docstring t))))
       `(eval-when (:compile-toplevel :load-toplevel :execute)
          (%defsetf-long-form ',access-fn
-                             ',(length store-variables)
+                             ',store-variables
                              (lambda (,subforms ,env ,@store-variables)
                                (declare (lambda-name (defsetf ,access-fn))
                                         (ignorable ,env))
@@ -245,11 +245,13 @@
                              ',docstring)))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-(defun %defsetf-long-form (access-fn store-variable-count expansion-fn documentation)
+(defun %defsetf-long-form (access-fn store-variables expansion-fn documentation)
   (flet ((expand (whole env)
            ;; Generate gensyms for every parameter, and for every store-variable.
-           (let* ((param-syms (loop for f in (rest whole) collect (gensym "PARAM")))
-                  (store-syms (loop repeat store-variable-count collect (gensym "STORE")))
+           (let* ((param-syms (loop for f in (rest whole)
+                                    collect (gensym "PARAM")))
+                  (store-syms (loop for name in store-variables
+                                    collect (gensym (string name))))
                   ;; Get the expansion.
                   (expansion (apply expansion-fn param-syms env store-syms)))
              (values param-syms

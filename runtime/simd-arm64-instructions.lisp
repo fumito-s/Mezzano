@@ -116,3 +116,139 @@
 (define-integer-vector s16 s16.8 16 8  t)
 (define-integer-vector s32 s32.4 32 4  t)
 (define-integer-vector s64 s64.2 64 2  t)
+
+(c::define-aref-transform u8.16-aref-4-interleaved-in-u32
+  u8.16-row-major-aref-4-interleaved-in-u32 u32
+  :value-count 4
+  :setter-name set-u8.16-aref-4-interleaved-in-u32
+  :row-major-setter-name set-u8.16-row-major-aref-4-interleaved-in-u32)
+
+(%define-aref-transforms
+ u8.16-aref-4-interleaved-in-u32
+ u8.16-row-major-aref-4-interleaved-in-u32
+ %u8.16-row-major-aref-4-interleaved-in-u32
+ u32 u8.16 4 4 nil)
+
+(%define-aref-transforms
+ set-u8.16-aref-4-interleaved-in-u32
+ set-u8.16-row-major-aref-4-interleaved-in-u32
+ %set-u8.16-row-major-aref-4-interleaved-in-u32
+ u32 u8.16 4 4 t)
+
+(defsetf u8.16-aref-4-interleaved-in-u32 (array &rest subscripts) (v1 v2 v3 v4)
+  `(set-u8.16-aref-4-interleaved-in-u32 ,v1 ,v2 ,v3 ,v4 ,array ,@subscripts))
+
+(defsetf u8.16-row-major-aref-4-interleaved-in-u32 (array index) (v1 v2 v3 v4)
+  `(set-u8.16-row-major-aref-4-interleaved-in-u32 ,v1 ,v2 ,v3 ,v4 ,array ,index))
+
+(c.a64::define-builtin %u8.16-row-major-aref-4-interleaved-in-u32
+    ((array index) (r1 r2 r3 r4) :has-wrapper nil)
+  (let ((unboxed-r1 (make-instance
+                     'mezzano.compiler.backend:virtual-register
+                     :kind :advsimd))
+        (unboxed-r2 (make-instance
+                     'mezzano.compiler.backend:virtual-register
+                     :kind :advsimd))
+        (unboxed-r3 (make-instance
+                     'mezzano.compiler.backend:virtual-register
+                     :kind :advsimd))
+        (unboxed-r4 (make-instance
+                     'mezzano.compiler.backend:virtual-register
+                     :kind :advsimd)))
+    (c.a64::emit
+     (make-instance 'mezzano.compiler.backend:move-instruction
+                    :source array
+                    :destination :x1))
+    (c.a64::emit
+     (make-instance 'c.a64::arm64-ld/st-multiple-instruction
+                    :opcode 'a64:ld4
+                    :size :4s
+                    :direction :load
+                    :registers (list unboxed-r1 unboxed-r2 unboxed-r3 unboxed-r4)
+                    :index index
+                    :scale 4))
+    (c.a64::emit
+     (make-instance 'c.a64::box-advsimd-instruction
+                    :source unboxed-r1
+                    :destination r1
+                    :header (simd::encode-simd-pack-header 'u8 16)))
+    (c.a64::emit
+     (make-instance 'c.a64::box-advsimd-instruction
+                    :source unboxed-r2
+                    :destination r2
+                    :header (simd::encode-simd-pack-header 'u8 16)))
+    (c.a64::emit
+     (make-instance 'c.a64::box-advsimd-instruction
+                    :source unboxed-r3
+                    :destination r3
+                    :header (simd::encode-simd-pack-header 'u8 16)))
+    (c.a64::emit
+     (make-instance 'c.a64::box-advsimd-instruction
+                    :source unboxed-r4
+                    :destination r4
+                    :header (simd::encode-simd-pack-header 'u8 16)))))
+
+(defun %u8.16-row-major-aref-4-interleaved-in-u32 (array index)
+  (%u8.16-row-major-aref-4-interleaved-in-u32 array index))
+
+(c.a64::define-builtin %set-u8.16-row-major-aref-4-interleaved-in-u32
+    ((v1 v2 v3 v4 array index) (r1 r2 r3 r4) :has-wrapper nil)
+  (let ((unboxed-v1 (make-instance
+                     'mezzano.compiler.backend:virtual-register
+                     :kind :advsimd))
+        (unboxed-v2 (make-instance
+                     'mezzano.compiler.backend:virtual-register
+                     :kind :advsimd))
+        (unboxed-v3 (make-instance
+                     'mezzano.compiler.backend:virtual-register
+                     :kind :advsimd))
+        (unboxed-v4 (make-instance
+                     'mezzano.compiler.backend:virtual-register
+                     :kind :advsimd)))
+    (c.a64::emit
+     (make-instance 'c.a64::unbox-advsimd-instruction
+                    :source v1
+                    :destination unboxed-v1))
+    (c.a64::emit
+     (make-instance 'c.a64::unbox-advsimd-instruction
+                    :source v2
+                    :destination unboxed-v2))
+    (c.a64::emit
+     (make-instance 'c.a64::unbox-advsimd-instruction
+                    :source v3
+                    :destination unboxed-v3))
+    (c.a64::emit
+     (make-instance 'c.a64::unbox-advsimd-instruction
+                    :source v4
+                    :destination unboxed-v4))
+    (c.a64::emit
+     (make-instance 'mezzano.compiler.backend:move-instruction
+                    :source array
+                    :destination :x1))
+    (c.a64::emit
+     (make-instance 'c.a64::arm64-ld/st-multiple-instruction
+                    :opcode 'a64:st4
+                    :size :4s
+                    :direction :store
+                    :registers (list unboxed-v1 unboxed-v2 unboxed-v3 unboxed-v4)
+                    :index index
+                    :scale 4))
+    (c.a64::emit
+     (make-instance 'mezzano.compiler.backend:move-instruction
+                    :source v1
+                    :destination r1))
+    (c.a64::emit
+     (make-instance 'mezzano.compiler.backend:move-instruction
+                    :source v2
+                    :destination r2))
+    (c.a64::emit
+     (make-instance 'mezzano.compiler.backend:move-instruction
+                    :source v3
+                    :destination r3))
+    (c.a64::emit
+     (make-instance 'mezzano.compiler.backend:move-instruction
+                    :source v4
+                    :destination r4))))
+
+(defun %set-u8.16-row-major-aref-4-interleaved-in-u32 (v1 v2 v3 v4 array index)
+  (%set-u8.16-row-major-aref-4-interleaved-in-u32 v1 v2 v3 v4 array index))
