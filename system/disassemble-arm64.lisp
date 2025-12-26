@@ -312,6 +312,41 @@
                    :operands (list (decode-gp64 (ldb +rt+ word))
                                    address))))
 
+(defun load/store-multiple-structures (context word)
+  (declare (ignore context))
+  (multiple-value-bind (ld st count)
+      (case (ldb (byte 2 14) word)
+        (#b0000 (values 'a64:ld4 'a64:st4 4))
+        (#b0010 (values ':ld1 ':st1 4))
+        (#b0100 (values ':ld3 ':st3 3))
+        (#b0110 (values ':ld1 ':st1 3))
+        (#b0111 (values ':ld1 ':st1 1))
+        (#b1000 (values ':ld2 ':st2 2))
+        (#b1010 (values ':ld1 ':st1 2)))
+    (let* ((q (logbitp 30 word))
+           (post (logbitp 23 word))
+           (size (case (ldb (byte 2 10) word)
+                   (#b00 (if q :16b :8b))
+                   (#b01 (if q :8h  :4h))
+                   (#b10 (if q :4s  :4s))
+                   (#b11 (if q :2d  nil))))
+           (rt (ldb +rt+ word))
+           (rm (ldb +rm+ word))
+           (rn (decode-gp64 (ldb +rn+ word) :sp t)))
+    (unless (and size count)
+      (return-from load/store-multiple-structures
+        (values nil :load/store-multiple-structures)))
+    (make-instance 'arm64-instruction
+                   :opcode (if (logbitp 22 word) ld st)
+                   :operands `(,size
+                               ,@(loop for i below count
+                                       collect (decode-fp (+ rt i) :q))
+                               ,(if post
+                                    `(:post ,rn ,(if (eql rm 31)
+                                                     (* count (if q 16 8))
+                                                     (decode-gp64 rm)))
+                                    `(,rn)))))))
+
 (defun loads-and-stores (context word)
   (cond ((eql (logand word #x3F000000) #x08000000)
          (load/store-exclusive context word))
@@ -325,6 +360,8 @@
          (load/store-register-register-offset context word))
         ((eql (logand word #x3B000000) #x39000000)
          (load/store-register-unsigned-immediate context word))
+        ((eql (logand word #xBF000000) #x0C000000)
+         (load/store-multiple-structures context word))
         (t (values nil :loads-and-stores))))
 
 (defun logical-shifted-register (context word)

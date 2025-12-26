@@ -1369,3 +1369,20 @@
                 (lap::convert-width (arm64-cas-current-value instruction) width)
                 (lap::convert-width (arm64-cas-new-value instruction) width)
                 (list (arm64-cas-mem-address instruction))))))
+
+(defmethod emit-lap (backend-function (instruction arm64-ld/st-multiple-instruction) uses defs)
+  ;; Convert to unboxed integer (scaled appropriately), with tag adjustment.
+  (emit `(lap:add :x9 :xzr ,(arm64-ld/st-multiple-index instruction) :lsl ,(- 3 sys.int::+n-fixnum-bits+))
+        `(lap:sub :x9 :x9 (- (object-slot-displacement 0))))
+  ;; Generate the address.
+  (emit `(lap:add :x9 :x1 :x9))
+  ;; Move to linked gc mode.
+  ;; x9 is interior pointer into x1.
+  (emit-gc-info :extra-registers :rax)
+  ;; Atomic op
+  (emit `(,(arm64-instruction-opcode instruction)
+          ,(arm64-ld/st-multiple-size instruction)
+          ,@(arm64-ld/st-multiple-registers instruction)
+          (:x9)))
+  ;; Finish up.
+  (emit-gc-info))

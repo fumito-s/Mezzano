@@ -276,8 +276,12 @@
          (rest address)
        (assert (member (register-class base) '(:gpr-64 :sp)) ()
                "Expected 64-bit integer register or sp as base address register.")
-       (assert (not (register-class imm)))
-       (values :post base imm)))
+       (cond ((eql (register-class imm) :gpr-64)
+              ;; ld/st multiple/single structure instruction support this
+              (values :post-register-offset base imm))
+             (t
+              (assert (not (register-class imm)))
+              (values :post base imm)))))
     (t
      ;; Base register only, or base plus some offset (displacement or scaled index).
      (let* ((base (first address)))
@@ -2442,4 +2446,61 @@
                               (ash sz 22)
                               (ash (register-number dst) +rd-shift+)
                               (ash (register-number lhs) +rn-shift+)))
+    (return-from instruction t)))
+
+(defun emit-ld/st-multiple (size loadp address first-register &rest other-registers)
+  (multiple-value-bind (mode base offset)
+      (parse-address address)
+    (multiple-value-bind (sz q)
+        (ecase size
+          (:8b  (values #b00 0))
+          (:16b (values #b00 1))
+          (:4h  (values #b01 0))
+          (:8h  (values #b01 1))
+          (:2s  (values #b10 0))
+          (:4s  (values #b10 1))
+          (:2d  (values #b11 1)))
+      (check-register-class first-register :fp-128)
+      (loop for i from 1
+            for reg in other-registers
+            do (check-register-class reg :fp-128)
+               (assert (eql (register-number first-register) (- (register-number reg) i))))
+      (ecase mode
+        (:base-plus-immediate
+         (assert (eql offset 0))
+         (emit-instruction (logior #x0C000000
+                                   (if loadp #x00400000 0)
+                                   (ash q 30)
+                                   (ash sz 10)
+                                   (ash (register-number first-register) +rt-shift+)
+                                   (ash (register-number base) +rn-shift+)))
+         t)
+        (:post
+         (if (zerop q)
+             (assert (eql offset 32))
+             (assert (eql offset 64)))
+         (emit-instruction (logior #x0C800000
+                                   (if loadp #x00400000 0)
+                                   (ash q 30)
+                                   (ash sz 10)
+                                   (ash 31 +rm-shift+)
+                                   (ash (register-number first-register) +rt-shift+)
+                                   (ash (register-number base) +rn-shift+)))
+         t)
+        (:post-register-offset
+         (emit-instruction (logior #x0C800000
+                                   (if loadp #x00400000 0)
+                                   (ash q 30)
+                                   (ash sz 10)
+                                   (ash (register-number offset) +rm-shift+)
+                                   (ash (register-number first-register) +rt-shift+)
+                                   (ash (register-number base) +rn-shift+)))
+         t)))))
+
+(define-instruction ld4 (size d1 d2 d3 d4 address)
+  (when (emit-ld/st-multiple size t address d1 d2 d3 d4)
+    (return-from instruction t)))
+
+(define-instruction st4 (size d1 d2 d3 d4 address)
+  (when (emit-ld/st-multiple size nil address d1 d2 d3 d4)
     (return-from instruction t)))

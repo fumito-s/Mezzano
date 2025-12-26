@@ -166,6 +166,44 @@
                            ,(arm64-cas-old-value instruction)
                            ,(arm64-cas-current-value instruction))))
 
+;; Expects object in :x1
+(defclass arm64-ld/st-multiple-instruction (ir:backend-instruction)
+  ((%opcode :initarg :opcode :reader arm64-instruction-opcode)
+   (%size :initarg :size :reader arm64-ld/st-multiple-size)
+   (%direction :initarg :direction :accessor arm64-ld/st-multiple-direction)
+   (%registers :initarg :registers :accessor arm64-ld/st-multiple-registers)
+   (%index :initarg :index :accessor arm64-ld/st-multiple-index)
+   (%scale :initarg :scale :accessor arm64-ld/st-multiple-scale)))
+
+(defmethod ra:instruction-clobbers ((instruction arm64-ld/st-multiple-instruction) (architecture c:arm64-target))
+  '(:x9))
+
+(defmethod ra:instruction-inputs-read-before-outputs-written-p ((instruction arm64-ld/st-multiple-instruction) (architecture c:arm64-target))
+  t)
+
+(defmethod ir:instruction-inputs ((instruction arm64-ld/st-multiple-instruction))
+  (list* :x1
+         (arm64-ld/st-multiple-index instruction)
+         (when (eql (arm64-ld/st-multiple-direction instruction) :store)
+           (arm64-ld/st-multiple-registers instruction))))
+
+(defmethod ir:instruction-outputs ((instruction arm64-ld/st-multiple-instruction))
+  (when (eql (arm64-ld/st-multiple-direction instruction) :load)
+    (arm64-ld/st-multiple-registers instruction)))
+
+(defmethod ir:replace-all-registers ((instruction arm64-ld/st-multiple-instruction) substitution-function)
+  (loop for reg on (arm64-ld/st-multiple-registers instruction)
+        do (setf (car reg) (funcall substitution-function (car reg))))
+  (setf (arm64-ld/st-multiple-index instruction) (funcall substitution-function (arm64-ld/st-multiple-index instruction))))
+
+(defmethod ir:print-instruction ((instruction arm64-ld/st-multiple-instruction))
+  (format t "   ~S~%"
+          `(:arm64-ld/st-multiple
+            ,(arm64-instruction-opcode instruction)
+            ,(arm64-ld/st-multiple-registers instruction)
+            ,(arm64-ld/st-multiple-index instruction)
+            ,(arm64-ld/st-multiple-scale instruction))))
+
 (defclass box-advsimd-instruction (ir:box-instruction)
   ((%header :initarg :header :reader advsimd-pack-header)))
 
@@ -375,7 +413,39 @@
                                                 :source input
                                                 :destination output))))))
 
+(defun assign-ld/st-multiple-registers (backend-function)
+  (let ((regs #(:q0 :q1 :q2 :q3 :q4 :q5 :q6 :q7
+                :q8 :q9 :q10 :q11 :q12 :q13 :q14 :q15
+                :q16 :q17 :q18 :q19 :q20 :q21 :q22 :q23
+                :q24 :q25 :q26 :q27 :q28 :q29 :q30 :q31))
+        (load-index 0)
+        (store-index 0))
+    (ir:do-instructions (inst backend-function)
+      (when (and (typep inst 'arm64-ld/st-multiple-instruction)
+                 (eql (arm64-ld/st-multiple-direction inst) :load))
+        (loop for reg on (arm64-ld/st-multiple-registers inst)
+              do
+                 (ir:insert-after
+                  backend-function inst
+                  (make-instance 'ir:move-instruction
+                                 :source (aref regs load-index)
+                                 :destination (car reg)))
+                 (setf (car reg) (aref regs load-index)
+                       load-index (rem (1+ load-index) (length regs)))))
+      (when (and (typep inst 'arm64-ld/st-multiple-instruction)
+                 (eql (arm64-ld/st-multiple-direction inst) :store))
+        (loop for reg on (arm64-ld/st-multiple-registers inst)
+              do
+                 (ir:insert-before
+                  backend-function inst
+                  (make-instance 'ir:move-instruction
+                                 :source (car reg)
+                                 :destination (aref regs store-index)))
+                 (setf (car reg) (aref regs store-index)
+                       store-index (rem (1+ store-index) (length regs))))))))
+
 (defmethod ir:perform-target-lowering-post-ssa (backend-function (target c:arm64-target))
   (lower-vector-loads backend-function)
   (lower-complicated-box-instructions backend-function)
-  (lower-fake-three-operand-instructions backend-function))
+  (lower-fake-three-operand-instructions backend-function)
+  (assign-ld/st-multiple-registers backend-function))

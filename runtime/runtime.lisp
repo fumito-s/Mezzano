@@ -364,6 +364,9 @@ thread's stack if this function is called from normal code."
   (unless (fixnump slot)
     (raise-type-error slot 'fixnum)
     (sys.int::%%unreachable))
+  ;; TODO: Can we be more clever about this using unsigned compares?
+  ;; Probably not, if the size of the object is smaller than the range
+  ;; then that underflows too...
   (unless (and (not (mezzano.runtime::%fixnum-< slot 0))
                (mezzano.runtime::%fixnum-< slot (mezzano.compiler::%fast-fixnum--
                                                  (%object-header-data object)
