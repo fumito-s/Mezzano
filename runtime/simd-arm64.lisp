@@ -278,39 +278,45 @@
   "Generate wrapper functions and transforms to transform a call to aref/row-major-aref to the appropriate builtin."
   (let ((values (when setter
                   (if (eql count 1)
-                      '(values)
+                      '(value)
                       (loop repeat count
                             collect (gensym "VALUE"))))))
     `(progn
        ;; TODO: Support other non-1D arrays
-       ;; TODO: Broadcast scalar values when setting.
        (eval-when (:compile-toplevel :load-toplevel :execute)
-         (c::define-transform ,row-major-aref (,@(loop for value in values
-                                                       collect (list value vector-type))
-                                               (vector (simple-array ,scalar-type (*)) array-type)
-                                               (index fixnum index-type))
-             ((:optimize (= safety 0) (= speed 3)))
-           `(the ,',(if (eql count 1)
-                        vector-type
-                        `(values ,@(loop repeat count collect vector-type)))
-                 (progn
-                   ,(c::insert-bounds-check vector array-type index index-type :adjust ,(1- (* n-lanes count)))
-                   (c::call ,',%row-major-aref ,,@values ,vector ,index)))))
+         ,@(loop for permute in (generate-permutation-list (loop repeat count collect vector-type))
+               collect
+                 `(c::define-transform ,row-major-aref (,@(loop for value in values
+                                                                for (ty) in permute
+                                                                collect `(,value ,ty))
+                                                        (vector (simple-array ,scalar-type (*)) array-type)
+                                                        (index fixnum index-type))
+                      ((:optimize (= safety 0) (= speed 3)))
+                    `(the ,',(if (eql count 1)
+                                 vector-type
+                                 `(values ,@(loop repeat count collect vector-type)))
+                          (progn
+                            ,(c::insert-bounds-check vector array-type index index-type :adjust ,(1- (* n-lanes count)))
+                            (c::call ,',%row-major-aref
+                                     ,,@(loop for (ty broadcast) in permute
+                                              for value in values
+                                              collect (if broadcast ``(c::call ,',broadcast ,,value) value))
+                                     ,vector ,index))))))
        (defun ,aref (,@values array &rest subscripts)
          ;; FIXME: Since we're loading N elements out of the array, we should check bounds
          ;; on the last subscript.
-         (funcall ',row-major-aref ,@values array (apply #'array-row-major-index array subscripts)))
+         (funcall #',row-major-aref ,@values array (apply #'array-row-major-index array subscripts)))
        ;; TODO: Support arbitrary non-simple arrays.
        (defun ,row-major-aref (,@values array index)
          (check-type array (simple-array ,scalar-type *))
          (assert (<= 0 index))
          (assert (<= (+ index ,(* n-lanes count)) (array-total-size array)))
-         (funcall ',%row-major-aref
-                  ,@values
+         (funcall #',%row-major-aref
+                  ,@(loop for val in values collect `(,vector-type ,val))
                   (if (typep array '(simple-array * (*)))
                       array ; 1D simple array
                       ;; Otherwise fetch the underlying 1D storage array
-                      (int::%object-ref-t array 'int::+complex-array-storage+))
+                      (int::%object-ref-t array ,int::+complex-array-storage+))
                   index)))))
 
 ;;; Generate aref accessors for the given type.
