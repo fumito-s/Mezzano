@@ -1372,10 +1372,20 @@
 
 (defmethod emit-lap (backend-function (instruction arm64-ld/st-multiple-instruction) uses defs)
   ;; Convert to unboxed integer (scaled appropriately), with tag adjustment.
-  (emit `(lap:add :x9 :xzr ,(arm64-ld/st-multiple-index instruction)
-                      :lsl ,(- (1- (integer-length (arm64-ld/st-multiple-scale instruction)))
-                               sys.int::+n-fixnum-bits+))
-        `(lap:sub :x9 :x9 (- (object-slot-displacement 0))))
+  (ecase (arm64-ld/st-multiple-scale instruction)
+    (1
+     (emit `(lap:add :x9 :xzr ,(arm64-ld/st-multiple-index instruction)
+                         :asr ,sys.int::+n-fixnum-bits+))
+     (emit `(lap:sub :x9 :x9 ,(- (object-slot-displacement 0)))))
+    (2
+     (emit `(lap:sub :x9 ,(arm64-ld/st-multiple-index instruction)
+                     ,(- (object-slot-displacement 0)))))
+    (4
+     (emit `(lap:add :x9 :xzr ,(arm64-ld/st-multiple-index instruction) :lsl 1))
+     (emit `(lap:sub :x9 :x9 ,(- (object-slot-displacement 0)))))
+    (8
+     (emit `(lap:add :x9 :xzr ,(arm64-ld/st-multiple-index instruction) :lsl 2))
+     (emit `(lap:sub :x9 :x9 ,(- (object-slot-displacement 0))))))
   ;; Generate the address.
   (emit `(lap:add :x9 :x1 :x9))
   ;; Move to linked gc mode.
