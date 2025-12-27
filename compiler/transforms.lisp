@@ -42,7 +42,17 @@
           (setf (arguments form) (loop
                                     for arg in (arguments form)
                                     collect (apply-transforms-1 arg target-architecture)))
-          form))))
+          ;; Once all the arguments have been updated, see if there's transform
+          ;; available to us again.
+          (let* ((matching-transform (match-transform form 't target-architecture))
+                 (new-form (if matching-transform
+                               (apply-transform matching-transform (arguments form) form)
+                               nil)))
+            (cond (new-form
+                   (change-made)
+                   new-form)
+                  (t
+                   form)))))))
 
 (defmethod apply-transforms-1 ((form ast-block) target-architecture)
   (setf (body form) (apply-transforms-1 (body form) target-architecture))
@@ -64,8 +74,14 @@
 
 (defmethod apply-transforms-1 ((form ast-let) target-architecture)
   (setf (bindings form) (loop
-                           for (var initform) in (bindings form)
-                           collect (list var (apply-transforms-1 initform target-architecture))))
+                          for (var initform) in (bindings form)
+                          for transformed = (apply-transforms-1 initform target-architecture)
+                          collect (list var transformed)
+                          when (and (not (eql initform transformed))
+                                    (typep transformed 'ast-the)
+                                    (lexical-variable-p var))
+                            do (push (cons var (ast-the-type transformed))
+                                     *propagated-type-definitions*)))
   (setf (body form) (apply-transforms-1 (body form) target-architecture))
   form)
 
