@@ -169,6 +169,8 @@ Make sure there is a virtio-net NIC attached.~%")
 (sys.int::cal "sys:source;gui;blit-x86-64-simd.lisp")
 #+arm64
 (sys.int::cal "sys:source;gui;blit-generic.lisp")
+#+arm64
+(sys.int::cal "sys:source;gui;blit-arm64-simd.lisp")
 (sys.int::cal "sys:source;gui;keymaps.lisp")
 (sys.int::cal "sys:source;gui;theme.lisp")
 (sys.int::cal "sys:source;gui;compositor.lisp")
