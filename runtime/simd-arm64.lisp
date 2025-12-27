@@ -282,6 +282,20 @@
                       (loop repeat count
                             collect (gensym "VALUE"))))))
     `(progn
+       ;; TODO: Support other non-1D arrays
+       ;; TODO: Broadcast scalar values when setting.
+       (eval-when (:compile-toplevel :load-toplevel :execute)
+         (c::define-transform ,row-major-aref (,@(loop for value in values
+                                                       collect (list value vector-type))
+                                               (vector (simple-array ,scalar-type (*)) array-type)
+                                               (index fixnum index-type))
+             ((:optimize (= safety 0) (= speed 3)))
+           `(the ,',(if (eql count 1)
+                        vector-type
+                        `(values ,@(loop repeat count collect vector-type)))
+                 (progn
+                   ,(c::insert-bounds-check vector array-type index index-type :adjust ,(1- (* n-lanes count)))
+                   (c::call ,',%row-major-aref ,,@values ,vector ,index)))))
        (defun ,aref (,@values array &rest subscripts)
          ;; FIXME: Since we're loading N elements out of the array, we should check bounds
          ;; on the last subscript.
@@ -297,20 +311,7 @@
                       array ; 1D simple array
                       ;; Otherwise fetch the underlying 1D storage array
                       (int::%object-ref-t array 'int::+complex-array-storage+))
-                  index))
-       ;; TODO: Support other non-1D arrays
-       ;; TODO: Broadcast scalar values when setting.
-       (c::define-transform ,row-major-aref (,@(loop for value in values
-                                                     collect (list value vector-type))
-                                             (vector (simple-array ,scalar-type (*)) array-type)
-                                             (index fixnum index-type))
-           ((:optimize (= safety 0) (= speed 3)))
-         `(the ,',(if (eql count 1)
-                      vector-type
-                      `(values ,@(loop repeat count collect vector-type)))
-               (progn
-                 ,(c::insert-bounds-check vector array-type index index-type :adjust ,(1- (* n-lanes count)))
-                 (c::call ,',%row-major-aref ,,@values ,vector ,index)))))))
+                  index)))))
 
 ;;; Generate aref accessors for the given type.
 
@@ -319,55 +320,55 @@
           (intern (format nil "%~A" row-major-aref) (symbol-package row-major-aref))))
     `(progn
        (eval-when (:compile-toplevel :load-toplevel :execute)
-         (export '(,aref ,row-major-aref)))
+         (export '(,aref ,row-major-aref))
 
-       (c::define-aref-transform ,aref ,row-major-aref ,scalar-type)
-
-       (%define-aref-transforms ,aref ,row-major-aref ,%row-major-aref ,scalar-type ,vector-type ,n-lanes 1 nil)
-       (%define-aref-transforms (setf ,aref) (setf ,row-major-aref) (setf ,%row-major-aref) ,scalar-type ,vector-type ,n-lanes 1 t)
-
-       (c.a64::define-builtin ,%row-major-aref ((array index) result
-                                                :has-wrapper nil)
-         (let ((unboxed-result (make-instance
-                                'mezzano.compiler.backend:virtual-register
-                                :kind :advsimd)))
-           (c.a64::with-builtin-object-access (ea ea-inputs array index ,(/ 16 n-lanes))
+         (c.a64::define-builtin ,%row-major-aref ((array index) result
+                                                  :has-wrapper nil)
+           (let ((unboxed-result (make-instance
+                                  'mezzano.compiler.backend:virtual-register
+                                  :kind :advsimd)))
+             (c.a64::with-builtin-object-access (ea ea-inputs array index ,(/ 16 n-lanes))
+               (c.a64::emit
+                (make-instance 'c.a64::arm64-instruction
+                               :opcode 'a64:ldr
+                               :operands (list unboxed-result ea)
+                               :inputs ea-inputs
+                               :outputs (list unboxed-result))))
              (c.a64::emit
-              (make-instance 'c.a64::arm64-instruction
-                             :opcode 'a64:ldr
-                             :operands (list unboxed-result ea)
-                             :inputs ea-inputs
-                             :outputs (list unboxed-result))))
-           (c.a64::emit
-            (make-instance 'c.a64::box-advsimd-instruction
-                           :source unboxed-result
-                           :destination result
-                           :header (simd::encode-simd-pack-header ',scalar-type ,n-lanes)))))
+              (make-instance 'c.a64::box-advsimd-instruction
+                             :source unboxed-result
+                             :destination result
+                             :header (simd::encode-simd-pack-header ',scalar-type ,n-lanes)))))
+         (c.a64::define-builtin (setf ,%row-major-aref) ((value array index) result
+                                                         :has-wrapper nil)
+           (let ((unboxed-value (make-instance
+                                 'mezzano.compiler.backend:virtual-register
+                                 :kind :advsimd)))
+             (c.a64::emit
+              (make-instance 'c.a64::unbox-advsimd-instruction
+                             :source value
+                             :destination unboxed-value))
+             (c.a64::with-builtin-object-access (ea ea-inputs array index ,(/ 16 n-lanes))
+               (c.a64::emit
+                (make-instance 'c.a64::arm64-instruction
+                               :opcode 'a64:str
+                               :operands (list unboxed-value ea)
+                               :inputs (list* unboxed-value ea-inputs)
+                               :outputs '())))
+             (c.a64::emit
+              (make-instance 'mezzano.compiler.backend:move-instruction
+                             :source value
+                             :destination result))))
+
+         (c::define-aref-transform ,aref ,row-major-aref ,scalar-type))
+
        (defun ,%row-major-aref (array index)
          (,%row-major-aref array index))
-
-       (c.a64::define-builtin (setf ,%row-major-aref) ((value array index) result
-                                                       :has-wrapper nil)
-         (let ((unboxed-value (make-instance
-                               'mezzano.compiler.backend:virtual-register
-                               :kind :advsimd)))
-           (c.a64::emit
-            (make-instance 'c.a64::unbox-advsimd-instruction
-                           :source value
-                           :destination unboxed-value))
-           (c.a64::with-builtin-object-access (ea ea-inputs array index ,(/ 16 n-lanes))
-             (c.a64::emit
-              (make-instance 'c.a64::arm64-instruction
-                             :opcode 'a64:str
-                             :operands (list unboxed-value ea)
-                             :inputs (list* unboxed-value ea-inputs)
-                             :outputs '())))
-           (c.a64::emit
-            (make-instance 'mezzano.compiler.backend:move-instruction
-                           :source value
-                           :destination result))))
        (defun (setf ,%row-major-aref) (value array index)
-         (setf (,%row-major-aref array index) value)))))
+         (setf (,%row-major-aref array index) value))
+
+       (%define-aref-transforms ,aref ,row-major-aref ,%row-major-aref ,scalar-type ,vector-type ,n-lanes 1 nil)
+       (%define-aref-transforms (setf ,aref) (setf ,row-major-aref) (setf ,%row-major-aref) ,scalar-type ,vector-type ,n-lanes 1 t))))
 
 ;;; Generate aref accessors for the given type, using the multiple structures
 ;;; load/store instructions to access multiple registers worth of data at once.
@@ -409,12 +410,83 @@
                     ((u64 s64 f64) 8))))
     `(progn
        (eval-when (:compile-toplevel :load-toplevel :execute)
-         (export '(,name ,row-major-name)))
+         (export '(,name ,row-major-name))
 
-       (c::define-aref-transform ,name ,row-major-name ,scalar-type
-         :value-count ,count
-         :setter-name ,setter-name
-         :row-major-setter-name ,row-major-setter-name)
+         (c.a64::define-builtin ,%row-major-name
+             ((array index) ,results :has-wrapper nil)
+           (let (,@(loop for v in unboxed-values
+                         collect `(,v (make-instance
+                                       'mezzano.compiler.backend:virtual-register
+                                       :kind :advsimd))))
+             (c.a64::emit
+              (make-instance 'mezzano.compiler.backend:move-instruction
+                             :source array
+                             :destination :x1))
+             (c.a64::emit
+              (make-instance 'c.a64::arm64-ld/st-multiple-instruction
+                             :opcode ',(if interleaved
+                                           (ecase count
+                                             (1 'a64:ld1)
+                                             (2 'a64:ld2)
+                                             (3 'a64:ld3)
+                                             (4 'a64:ld4))
+                                           'a64:ld1)
+                             :size ,elt-size
+                             :direction :load
+                             :registers (list ,@unboxed-values)
+                             :index index
+                             :scale ,elt-scale))
+             ,@(loop for v in unboxed-values
+                     for r in results
+                     collect `(c.a64::emit
+                               ,(box-instruction-fragment vector-type v r)))))
+
+         (c.a64::define-builtin ,%row-major-setter-name
+             ((,@values array index) ,results :has-wrapper nil)
+           (let (,@(loop for v in unboxed-values
+                         collect `(,v (make-instance
+                                       'mezzano.compiler.backend:virtual-register
+                                       :kind :advsimd))))
+             ,@(loop for v in values
+                     for u in unboxed-values
+                     collect `(c.a64::emit
+                               (make-instance 'c.a64::unbox-advsimd-instruction
+                                              :source ,v
+                                              :destination ,u)))
+             (c.a64::emit
+              (make-instance 'mezzano.compiler.backend:move-instruction
+                             :source array
+                             :destination :x1))
+             (c.a64::emit
+              (make-instance 'c.a64::arm64-ld/st-multiple-instruction
+                             :opcode ',(if interleaved
+                                           (ecase count
+                                             (1 'a64:st1)
+                                             (2 'a64:st2)
+                                             (3 'a64:st3)
+                                             (4 'a64:st4))
+                                           'a64:st1)
+                             :size ,elt-size
+                             :direction :store
+                             :registers (list ,@unboxed-values)
+                             :index index
+                             :scale ,elt-scale))
+             ,@(loop for v in values
+                     for r in results
+                     collect `(c.a64::emit
+                               (make-instance 'mezzano.compiler.backend:move-instruction
+                                              :source ,v
+                                              :destination ,r)))))
+
+         (c::define-aref-transform ,name ,row-major-name ,scalar-type
+           :value-count ,count
+           :setter-name ,setter-name
+           :row-major-setter-name ,row-major-setter-name))
+
+       (defun ,%row-major-name (array index)
+         (,%row-major-name array index))
+       (defun ,%row-major-setter-name (,@values array index)
+         (,%row-major-setter-name ,@values array index))
 
        (%define-aref-transforms ,name ,row-major-name ,%row-major-name
                                 ,scalar-type ,vector-type ,n-lanes ,count nil)
@@ -423,81 +495,8 @@
 
        (defsetf ,name (array &rest subscripts) ,values
          `(,',setter-name ,,@values ,array ,@subscripts))
-
        (defsetf ,row-major-name (array index) ,values
-         `(,',row-major-setter-name ,,@values ,array ,index))
-
-       (c.a64::define-builtin ,%row-major-name
-           ((array index) ,results :has-wrapper nil)
-         (let (,@(loop for v in unboxed-values
-                       collect `(,v (make-instance
-                                     'mezzano.compiler.backend:virtual-register
-                                     :kind :advsimd))))
-           (c.a64::emit
-            (make-instance 'mezzano.compiler.backend:move-instruction
-                           :source array
-                           :destination :x1))
-           (c.a64::emit
-            (make-instance 'c.a64::arm64-ld/st-multiple-instruction
-                           :opcode ',(if interleaved
-                                         (ecase count
-                                           (1 'a64:ld1)
-                                           (2 'a64:ld2)
-                                           (3 'a64:ld3)
-                                           (4 'a64:ld4))
-                                         'a64:ld1)
-                           :size ,elt-size
-                           :direction :load
-                           :registers (list ,@unboxed-values)
-                           :index index
-                           :scale ,elt-scale))
-           ,@(loop for v in unboxed-values
-                   for r in results
-                   collect `(c.a64::emit
-                             ,(box-instruction-fragment vector-type v r)))))
-
-       (defun ,%row-major-name (array index)
-         (,%row-major-name array index))
-
-       (c.a64::define-builtin ,%row-major-setter-name
-           ((,@values array index) ,results :has-wrapper nil)
-         (let (,@(loop for v in unboxed-values
-                       collect `(,v (make-instance
-                                     'mezzano.compiler.backend:virtual-register
-                                     :kind :advsimd))))
-           ,@(loop for v in values
-                   for u in unboxed-values
-                   collect `(c.a64::emit
-                             (make-instance 'c.a64::unbox-advsimd-instruction
-                                            :source ,v
-                                            :destination ,u)))
-           (c.a64::emit
-            (make-instance 'mezzano.compiler.backend:move-instruction
-                           :source array
-                           :destination :x1))
-           (c.a64::emit
-            (make-instance 'c.a64::arm64-ld/st-multiple-instruction
-                           :opcode ',(if interleaved
-                                         (ecase count
-                                           (1 'a64:st1)
-                                           (2 'a64:st2)
-                                           (3 'a64:st3)
-                                           (4 'a64:st4))
-                                         'a64:st1)
-                           :size ,elt-size
-                           :direction :store
-                           :registers (list ,@unboxed-values)
-                           :index index
-                           :scale ,elt-scale))
-           ,@(loop for v in values
-                   for r in results
-                   collect `(c.a64::emit
-                             (make-instance 'mezzano.compiler.backend:move-instruction
-                                            :source ,v
-                                            :destination ,r)))))
-
-       (defun ,%row-major-setter-name (,@values array index)
-         (,%row-major-setter-name ,@values array index)))))
+         `(,',row-major-setter-name ,,@values ,array ,index)))))
 
 ;;; Generate a broadcast cast function, either returning a vector of the correct type
 ;;; unchanged, or a scalar broadcast to a vector.
