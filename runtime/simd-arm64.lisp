@@ -578,10 +578,15 @@
 
 (defmacro define-scalar-cast (name)
   `(progn
-     (declaim (inline ,name))
      (eval-when (:compile-toplevel :load-toplevel :execute)
-       (export ',name))
-     (defun ,name (value) value)))
+       (export ',name)
+       (c::define-transform ,name ((value ,name))
+           ((:optimize (= safety 0) (= speed 3)))
+         `(the ,',name ,value))
+       (c::mark-as-constant-foldable ',name))
+     (defun ,name (value)
+       (check-type value ,name)
+       value)))
 
 (defmacro define-associative-op (name type base identity)
   `(progn
