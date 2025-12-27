@@ -29,7 +29,7 @@
   (let* ((t1 (f64.2! (f64 x))))
     (f64.2-lane-insert t1 y 1)))
 
-(defmacro define-float-op (base-name result-types value-types results values opcode operand)
+(defmacro define-float-op (base-name result-types value-types results values opcode operand &key (export t))
   (flet ((doit (scalar-type vector-type type-keyword)
            (flet ((update-type (type)
                     (case type
@@ -40,21 +40,24 @@
                                (symbol-package vector-type))))
              `(define-op ,name
                   ,(mapcar #'update-type result-types)
-                  ,(mapcar #'update-type value-types)
-                  ,results ,values
-                  ,opcode
-                  (let ((type-keyword ,type-keyword))
-                    ,operand))))))
+                ,(mapcar #'update-type value-types)
+                ,results ,values
+                ,opcode
+                (let ((type-keyword ,type-keyword))
+                  ,operand)
+                :export ,export)))))
     `(progn
        ,(doit 'f32 'f32.4 :4s)
        ,(doit 'f64 'f64.2 :2d))))
 
-(define-float-op -broadcast (vector) (scalar)        (result) (value)   a64:dup.v  `(,type-keyword ,result (:fp-128 ,value) 0))
-(define-float-op +-two-arg  (vector) (vector vector) (result) (lhs rhs) a64:fadd.v `(,result ,lhs ,rhs ,type-keyword))
-(define-float-op --two-arg  (vector) (vector vector) (result) (lhs rhs) a64:fsub.v `(,result ,lhs ,rhs ,type-keyword))
+(define-float-op -broadcast (vector) (scalar)        (result) (value)   a64:dup.v  `(,type-keyword ,result (:fp-128 ,value) 0) :export nil)
+(define-float-op +-two-arg  (vector) (vector vector) (result) (lhs rhs) a64:fadd.v `(,result ,lhs ,rhs ,type-keyword) :export nil)
+(define-float-op --two-arg  (vector) (vector vector) (result) (lhs rhs) a64:fsub.v `(,result ,lhs ,rhs ,type-keyword) :export nil)
 
-(int::define-commutative-arithmetic-operator f32.4+ f32.4+-two-arg (f32.4 0.0f0))
-(int::define-commutative-arithmetic-operator f64.2+ f64.2+-two-arg (f64.2 0.0d0))
+(define-associative-op f32.4+ f32.4 f32.4+-two-arg (f32.4 0.0f0))
+(define-reducing-op    f32.4- f32.4 f32.4--two-arg (f32.4 0.0f0))
+(define-associative-op f64.2+ f64.2 f64.2+-two-arg (f64.2 0.0d0))
+(define-reducing-op    f64.2- f64.2 f64.2--two-arg (f64.2 0.0d0))
 
 (define-aref f32.4-aref f32.4-row-major-aref f32 f32.4 4)
 
@@ -93,17 +96,17 @@
          (define-broadcast-cast ,vector-type ,(name "-BROADCAST") ,vector-type ,scalar-type)
          (define-reinterpret-cast ,(name "!") ,vector-type ,scalar-type)
 
-         (define-op ,(name "-BROADCAST")           (,vector-type) (,scalar-type)              (result) (value)       a64:dup.v   `(,',full-width ,result (,',gpr-width ,value)))
+         (define-op ,(name "-BROADCAST")           (,vector-type) (,scalar-type)              (result) (value)       a64:dup.v   `(,',full-width ,result (,',gpr-width ,value)) :export nil)
          (define-op ,(name "-DUP")                 (,vector-type) (,vector-type ,lane-imm)    (result) (value lane)  a64:dup.v   `(,',full-width ,result ,value ,lane))
          (define-op ,(name "-LANE-EXTRACT")        (,scalar-type) (,vector-type ,lane-imm)    (result) (value lane)
              ,(if (and signedp (not (eql bit-width 64))) 'a64:smov.v 'a64:umov.v)
              ,(cond (signedp ``(,',base-width ,result ,value ,lane)) ; force 64-bit dest
                     (t       ``(,',base-width (,',gpr-width ,result) ,value ,lane))))
          (define-op ,(name "-NOT")                 (,vector-type) (,vector-type)              (result) (value)       a64:not.v   `(,result ,value :16b))
-         (define-op ,(name "-AND-TWO-ARG")         (,vector-type) (,vector-type ,vector-type) (result) (lhs rhs)     a64:and.v   `(,result ,lhs ,rhs :16b))
-         (define-op ,(name "+-TWO-ARG")            (,vector-type) (,vector-type ,vector-type) (result) (lhs rhs)     a64:add.v   `(,result ,lhs ,rhs ,',full-width))
-         (define-op ,(name "+-SATURATING-TWO-ARG") (,vector-type) (,vector-type ,vector-type) (result) (lhs rhs)     ,(if signedp 'a64:sqadd.v 'a64:uqadd.v) `(,result ,lhs ,rhs ,',full-width))
-         (define-op ,(name "--TWO-ARG")            (,vector-type) (,vector-type ,vector-type) (result) (lhs rhs)     a64:sub.v   `(,result ,lhs ,rhs ,',full-width))
+         (define-op ,(name "-AND-TWO-ARG")         (,vector-type) (,vector-type ,vector-type) (result) (lhs rhs)     a64:and.v   `(,result ,lhs ,rhs :16b) :export nil)
+         (define-op ,(name "+-TWO-ARG")            (,vector-type) (,vector-type ,vector-type) (result) (lhs rhs)     a64:add.v   `(,result ,lhs ,rhs ,',full-width) :export nil)
+         (define-op ,(name "+-SATURATING-TWO-ARG") (,vector-type) (,vector-type ,vector-type) (result) (lhs rhs)     ,(if signedp 'a64:sqadd.v 'a64:uqadd.v) `(,result ,lhs ,rhs ,',full-width) :export nil)
+         (define-op ,(name "--TWO-ARG")            (,vector-type) (,vector-type ,vector-type) (result) (lhs rhs)     a64:sub.v   `(,result ,lhs ,rhs ,',full-width) :export nil)
          (define-op ,(name "-SHIFTR")              (,vector-type) (,vector-type ,shift-imm)   (result) (value shift) ,(if signedp 'a64:sshr.v 'a64:ushr.v) `(,result ,value ,shift ,',full-width) :shiftp t)
 
          ,@(when wider
@@ -112,13 +115,13 @@
                (define-op ,(name (format nil "-FROM-~A" wider)) (,vector-type) (,wider)       (result) (value)       a64:xtn.v   `(,result ,value ,',half-width))
                (define-op ,(name (format nil "-FROM-~A-HI" wider)) (,vector-type) (,vector-type ,wider) (result) (lhs rhs) a64:xtn2.v `(,result ,rhs ,',full-width) :rmw t)))
 
-         (define-arithmetic-operator ,(name "+") ,(name "+-TWO-ARG") (,vector-type 0) :commutative t)
-         (define-arithmetic-operator ,(name "+-SATURATING") ,(name "+-SATURATING-TWO-ARG") (,vector-type 0) :commutative t)
-         (define-arithmetic-operator ,(name "-") ,(name "--TWO-ARG") (,vector-type 1))
+         (define-associative-op ,(name "+")            ,vector-type ,(name "+-TWO-ARG") (,vector-type 0))
+         (define-associative-op ,(name "+-SATURATING") ,vector-type ,(name "+-SATURATING-TWO-ARG") (,vector-type 0))
+         (define-reducing-op    ,(name "-")            ,vector-type ,(name "--TWO-ARG") (,vector-type 1))
          ,@(unless (eql bit-width 64)
-             `((define-op ,(name "*-TWO-ARG")      (,vector-type) (,vector-type ,vector-type) (result) (lhs rhs)     a64:mul.v   `(,result ,lhs ,rhs ,',full-width))
-               (define-arithmetic-operator ,(name "*") ,(name "*-TWO-ARG") (,vector-type 1) :commutative t)))
-         (define-arithmetic-operator ,(name "-AND") ,(name "-AND-TWO-ARG") (,vector-type ,(if signedp -1 (1- (ash 1 bit-width)))) :commutative t)
+             `((define-op ,(name "*-TWO-ARG")      (,vector-type) (,vector-type ,vector-type) (result) (lhs rhs)     a64:mul.v   `(,result ,lhs ,rhs ,',full-width) :export nil)
+               (define-associative-op ,(name "*")      ,vector-type ,(name "*-TWO-ARG") (,vector-type 1))))
+         (define-associative-op ,(name "-AND")         ,vector-type ,(name "-AND-TWO-ARG") (,vector-type ,(if signedp -1 (1- (ash 1 bit-width)))))
 
          (define-aref ,(name "-AREF") ,(name "-ROW-MAJOR-AREF") ,scalar-type ,vector-type ,lane-count)
 
