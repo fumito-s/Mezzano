@@ -193,7 +193,7 @@
 ;; This big scary macro takes in a bunch of names, arguments, types, along with an opcode & operand
 ;; and produces all the machinery needed to compile that operation efficiently & inline, for most cases.
 
-(defmacro define-op (name result-types value-types result-names value-names opcode operands &key shiftp rmw)
+(defmacro define-op (name result-types value-types result-names value-names opcode operands &key shiftp rmw (export t))
   (let ((boxed-values (loop for name in value-names
                             collect (make-symbol (format nil "~A-BOXED" (string name)))))
         (boxed-results (loop for name in result-names
@@ -202,6 +202,8 @@
                                (symbol-package name))))
     `(progn
        (eval-when (:compile-toplevel :load-toplevel :execute)
+         ,@(when export
+             `((export ',name)))
          ,(generate-transform-permutations
            name internal-name
            result-types value-types
@@ -316,6 +318,9 @@
   (let ((%row-major-aref
           (intern (format nil "%~A" row-major-aref) (symbol-package row-major-aref))))
     `(progn
+       (eval-when (:compile-toplevel :load-toplevel :execute)
+         (export '(,aref ,row-major-aref)))
+
        (c::define-aref-transform ,aref ,row-major-aref ,scalar-type)
 
        (%define-aref-transforms ,aref ,row-major-aref ,%row-major-aref ,scalar-type ,vector-type ,n-lanes 1 nil)
@@ -364,12 +369,143 @@
        (defun (setf ,%row-major-aref) (value array index)
          (setf (,%row-major-aref array index) value)))))
 
+;;; Generate aref accessors for the given type, using the multiple structures
+;;; load/store instructions to access multiple registers worth of data at once.
+
+(defmacro define-aref-multiple (scalar-type vector-type n-lanes count interleaved in-suffix-p)
+  (let ((name (intern (format nil "~A-AREF-~A~:[~;-INTERLEAVED~]~@[-IN-~A~]"
+                              vector-type count interleaved (if in-suffix-p scalar-type))
+                      (symbol-package vector-type)))
+        (row-major-name (intern (format nil "~A-ROW-MAJOR-AREF-~A~:[~;-INTERLEAVED~]~@[-IN-~A~]"
+                                        vector-type count interleaved (if in-suffix-p scalar-type))
+                                (symbol-package vector-type)))
+        (%row-major-name (intern (format nil "%~A-ROW-MAJOR-AREF-~A~:[~;-INTERLEAVED~]~@[-IN-~A~]"
+                                         vector-type count interleaved (if in-suffix-p scalar-type))
+                                 (symbol-package vector-type)))
+        (setter-name (intern (format nil "SET-~A-AREF-~A~:[~;-INTERLEAVED~]~@[-IN-~A~]"
+                                     vector-type count interleaved (if in-suffix-p scalar-type))
+                             (symbol-package vector-type)))
+        (row-major-setter-name (intern (format nil "SET-~A-ROW-MAJOR-AREF-~A~:[~;-INTERLEAVED~]~@[-IN-~A~]"
+                                               vector-type count interleaved (if in-suffix-p scalar-type))
+                                       (symbol-package vector-type)))
+        (%row-major-setter-name (intern (format nil "%SET-~A-ROW-MAJOR-AREF-~A~:[~;-INTERLEAVED~]~@[-IN-~A~]"
+                                                vector-type count interleaved (if in-suffix-p scalar-type))
+                                        (symbol-package vector-type)))
+        (values (loop for i below count
+                      collect (intern (format nil "V~D" i) (symbol-package vector-type))))
+        (results (loop for i below count
+                       collect (make-symbol (format nil "R~D" i))))
+        (unboxed-values (loop for i below count
+                              collect (make-symbol (format nil "V~D-UNBOXED" i))))
+        (elt-size (ecase vector-type
+                    ((u8.16 s8.16) :16b)
+                    ((u16.8 s16.8) :8h)
+                    ((u32.4 s32.4 f32.4) :4s)
+                    ((u64.2 s64.2 f64.2) :2d)))
+        (elt-scale (ecase scalar-type
+                    ((u8 s8) 1)
+                    ((u16 s16) 2)
+                    ((u32 s32 f32) 4)
+                    ((u64 s64 f64) 8))))
+    `(progn
+       (eval-when (:compile-toplevel :load-toplevel :execute)
+         (export '(,name ,row-major-name)))
+
+       (c::define-aref-transform ,name ,row-major-name ,scalar-type
+         :value-count ,count
+         :setter-name ,setter-name
+         :row-major-setter-name ,row-major-setter-name)
+
+       (%define-aref-transforms ,name ,row-major-name ,%row-major-name
+                                ,scalar-type ,vector-type ,n-lanes ,count nil)
+       (%define-aref-transforms ,setter-name ,row-major-setter-name ,%row-major-setter-name
+                                ,scalar-type ,vector-type ,n-lanes ,count t)
+
+       (defsetf ,name (array &rest subscripts) ,values
+         `(,',setter-name ,,@values ,array ,@subscripts))
+
+       (defsetf ,row-major-name (array index) ,values
+         `(,',row-major-setter-name ,,@values ,array ,index))
+
+       (c.a64::define-builtin ,%row-major-name
+           ((array index) ,results :has-wrapper nil)
+         (let (,@(loop for v in unboxed-values
+                       collect `(,v (make-instance
+                                     'mezzano.compiler.backend:virtual-register
+                                     :kind :advsimd))))
+           (c.a64::emit
+            (make-instance 'mezzano.compiler.backend:move-instruction
+                           :source array
+                           :destination :x1))
+           (c.a64::emit
+            (make-instance 'c.a64::arm64-ld/st-multiple-instruction
+                           :opcode ',(if interleaved
+                                         (ecase count
+                                           (1 'a64:ld1)
+                                           (2 'a64:ld2)
+                                           (3 'a64:ld3)
+                                           (4 'a64:ld4))
+                                         'a64:ld1)
+                           :size ,elt-size
+                           :direction :load
+                           :registers (list ,@unboxed-values)
+                           :index index
+                           :scale ,elt-scale))
+           ,@(loop for v in unboxed-values
+                   for r in results
+                   collect `(c.a64::emit
+                             ,(box-instruction-fragment vector-type v r)))))
+
+       (defun ,%row-major-name (array index)
+         (,%row-major-name array index))
+
+       (c.a64::define-builtin ,%row-major-setter-name
+           ((,@values array index) ,results :has-wrapper nil)
+         (let (,@(loop for v in unboxed-values
+                       collect `(,v (make-instance
+                                     'mezzano.compiler.backend:virtual-register
+                                     :kind :advsimd))))
+           ,@(loop for v in values
+                   for u in unboxed-values
+                   collect `(c.a64::emit
+                             (make-instance 'c.a64::unbox-advsimd-instruction
+                                            :source ,v
+                                            :destination ,u)))
+           (c.a64::emit
+            (make-instance 'mezzano.compiler.backend:move-instruction
+                           :source array
+                           :destination :x1))
+           (c.a64::emit
+            (make-instance 'c.a64::arm64-ld/st-multiple-instruction
+                           :opcode ',(if interleaved
+                                         (ecase count
+                                           (1 'a64:st1)
+                                           (2 'a64:st2)
+                                           (3 'a64:st3)
+                                           (4 'a64:st4))
+                                         'a64:st1)
+                           :size ,elt-size
+                           :direction :store
+                           :registers (list ,@unboxed-values)
+                           :index index
+                           :scale ,elt-scale))
+           ,@(loop for v in values
+                   for r in results
+                   collect `(c.a64::emit
+                             (make-instance 'mezzano.compiler.backend:move-instruction
+                                            :source ,v
+                                            :destination ,r)))))
+
+       (defun ,%row-major-setter-name (,@values array index)
+         (,%row-major-setter-name ,@values array index)))))
+
 ;;; Generate a broadcast cast function, either returning a vector of the correct type
 ;;; unchanged, or a scalar broadcast to a vector.
 
 (defmacro define-broadcast-cast (name broadcast-scalar vector-type scalar-type)
   `(progn
      (eval-when (:compile-toplevel :load-toplevel :execute)
+       (export ',name)
        (c::define-transform ,name ((value ,scalar-type))
            ((:optimize (= safety 0) (= speed 3)))
          `(the ,',vector-type
@@ -390,6 +526,7 @@
                                       (symbol-package name))))
     `(progn
        (eval-when (:compile-toplevel :load-toplevel :execute)
+         (export ',name)
          (c::define-transform ,name ((value ,scalar-type))
              ((:optimize (= safety 0) (= speed 3)))
            `(the ,',vector-type
@@ -443,20 +580,25 @@
 (defmacro define-scalar-cast (name)
   `(progn
      (declaim (inline ,name))
+     (eval-when (:compile-toplevel :load-toplevel :execute)
+       (export ',name))
      (defun ,name (value) value)))
 
 (defmacro define-arithmetic-operator (name base identity &key commutative)
-  `(progn (defun ,name (&rest numbers)
-            (declare (dynamic-extent numbers))
-            (let ((result ,identity))
-              (dolist (n numbers)
-                (setf result (,base result n)))
-              result))
-          (define-compiler-macro ,name (&rest numbers)
-            (cond ((null numbers) ',identity)
-                  ((null (rest numbers))
-                   `(the number ,(first numbers)))
-                  (t (let ((result (first numbers)))
-                       (dolist (n (rest numbers))
-                         (setf result (list ',base result n)))
-                       result))))))
+  `(progn
+     (eval-when (:compile-toplevel :load-toplevel :execute)
+       (export ',name))
+     (defun ,name (&rest numbers)
+       (declare (dynamic-extent numbers))
+       (let ((result ,identity))
+         (dolist (n numbers)
+           (setf result (,base result n)))
+         result))
+     (define-compiler-macro ,name (&rest numbers)
+       (cond ((null numbers) ',identity)
+             ((null (rest numbers))
+              `(the number ,(first numbers)))
+             (t (let ((result (first numbers)))
+                  (dolist (n (rest numbers))
+                    (setf result (list ',base result n)))
+                  result))))))

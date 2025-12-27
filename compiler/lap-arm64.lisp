@@ -2448,7 +2448,7 @@
                               (ash (register-number lhs) +rn-shift+)))
     (return-from instruction t)))
 
-(defun emit-ld/st-multiple (size loadp address first-register &rest other-registers)
+(defun emit-ld/st-multiple (size loadp opcode address first-register &rest other-registers)
   (multiple-value-bind (mode base offset)
       (parse-address address)
     (multiple-value-bind (sz q)
@@ -2472,6 +2472,7 @@
                                    (if loadp #x00400000 0)
                                    (ash q 30)
                                    (ash sz 10)
+                                   (ash opcode 12)
                                    (ash (register-number first-register) +rt-shift+)
                                    (ash (register-number base) +rn-shift+)))
          t)
@@ -2483,6 +2484,7 @@
                                    (if loadp #x00400000 0)
                                    (ash q 30)
                                    (ash sz 10)
+                                   (ash opcode 12)
                                    (ash 31 +rm-shift+)
                                    (ash (register-number first-register) +rt-shift+)
                                    (ash (register-number base) +rn-shift+)))
@@ -2492,15 +2494,70 @@
                                    (if loadp #x00400000 0)
                                    (ash q 30)
                                    (ash sz 10)
+                                   (ash opcode 12)
                                    (ash (register-number offset) +rm-shift+)
                                    (ash (register-number first-register) +rt-shift+)
                                    (ash (register-number base) +rn-shift+)))
          t)))))
 
+(define-instruction ld1 (size d1 &rest rest)
+  (ecase (length rest)
+    (1
+     (destructuring-bind (address) rest
+       (when (emit-ld/st-multiple size t #b0111 address d1)
+         (return-from instruction t))))
+    (2
+     (destructuring-bind (d2 address) rest
+       (when (emit-ld/st-multiple size t #b1010 address d1 d2)
+         (return-from instruction t))))
+    (3
+     (destructuring-bind (d2 d3 address) rest
+       (when (emit-ld/st-multiple size t #b0110 address d1 d2 d3)
+         (return-from instruction t))))
+    (4
+     (destructuring-bind (d2 d3 d4 address) rest
+       (when (emit-ld/st-multiple size t #b0010 address d1 d2 d3 d4)
+         (return-from instruction t))))))
+
+(define-instruction st1 (size d1 &rest rest)
+  (ecase (length rest)
+    (1
+     (destructuring-bind (address) rest
+       (when (emit-ld/st-multiple size nil #b0111 address d1)
+         (return-from instruction t))))
+    (2
+     (destructuring-bind (d2 address) rest
+       (when (emit-ld/st-multiple size nil #b1010 address d1 d2)
+         (return-from instruction t))))
+    (3
+     (destructuring-bind (d2 d3 address) rest
+       (when (emit-ld/st-multiple size nil #b0110 address d1 d2 d3)
+         (return-from instruction t))))
+    (4
+     (destructuring-bind (d2 d3 d4 address) rest
+       (when (emit-ld/st-multiple size nil #b0010 address d1 d2 d3 d4)
+         (return-from instruction t))))))
+
+(define-instruction ld2 (size d1 d2 address)
+  (when (emit-ld/st-multiple size t #b1000 address d1 d2)
+    (return-from instruction t)))
+
+(define-instruction st2 (size d1 d2 address)
+  (when (emit-ld/st-multiple size nil #b1000 address d1 d2)
+    (return-from instruction t)))
+
+(define-instruction ld3 (size d1 d2 d3 address)
+  (when (emit-ld/st-multiple size t #b0100 address d1 d2 d3)
+    (return-from instruction t)))
+
+(define-instruction st3 (size d1 d2 d3 address)
+  (when (emit-ld/st-multiple size nil #b0100 address d1 d2 d3)
+    (return-from instruction t)))
+
 (define-instruction ld4 (size d1 d2 d3 d4 address)
-  (when (emit-ld/st-multiple size t address d1 d2 d3 d4)
+  (when (emit-ld/st-multiple size t #b0000 address d1 d2 d3 d4)
     (return-from instruction t)))
 
 (define-instruction st4 (size d1 d2 d3 d4 address)
-  (when (emit-ld/st-multiple size nil address d1 d2 d3 d4)
+  (when (emit-ld/st-multiple size nil #b0000 address d1 d2 d3 d4)
     (return-from instruction t)))

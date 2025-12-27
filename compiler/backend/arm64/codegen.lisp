@@ -1372,7 +1372,9 @@
 
 (defmethod emit-lap (backend-function (instruction arm64-ld/st-multiple-instruction) uses defs)
   ;; Convert to unboxed integer (scaled appropriately), with tag adjustment.
-  (emit `(lap:add :x9 :xzr ,(arm64-ld/st-multiple-index instruction) :lsl ,(- 3 sys.int::+n-fixnum-bits+))
+  (emit `(lap:add :x9 :xzr ,(arm64-ld/st-multiple-index instruction)
+                      :lsl ,(- (1- (integer-length (arm64-ld/st-multiple-scale instruction)))
+                               sys.int::+n-fixnum-bits+))
         `(lap:sub :x9 :x9 (- (object-slot-displacement 0))))
   ;; Generate the address.
   (emit `(lap:add :x9 :x1 :x9))
