@@ -77,22 +77,17 @@
   (initialize-gic distributor-address cpu-address)))
 
 (defun configure-gic ()
-  (let ((n-interrupts (gic-max-interrupts)))
-    (debug-print-line n-interrupts " total GIC interrupts")
+  (let ((n-interrupts (gic-max-interrupts))
+        (n-cpus (gic-max-cpu)))
+    (debug-print-line n-interrupts " total GIC interrupts, " n-cpus " CPUs")
     ;; Mask and reset all interrupts.
-    (loop
-       for i from 0 below n-interrupts by 32
-       for reg from 0 by 4
-       do
-         (setf (gic-dist-reg (+ +gicd-icenabler0+ reg)) #xFFFFFFFF)
-         (setf (gic-dist-reg (+ +gicd-icpendr0+ reg)) #xFFFFFFFF))
-    (when (> (gic-max-cpu) 1)
+    (loop for i below (truncate n-interrupts 32)
+          do (setf (gic-dist-reg (+ +gicd-icenabler0+ (* i 4))) #xFFFFFFFF
+                   (gic-dist-reg (+ +gicd-icpendr0+ (* i 4))) #xFFFFFFFF))
+    (when (> n-cpus 1)
       ;; Set external interrupts to target cpu 0.
-      (loop
-         for i from 32 below n-interrupts by 32
-         for reg from 8 by 4
-         do
-           (setf (gic-dist-reg (+ +gicd-itargetsr0+ reg)) #x01010101)))
+      (loop for intr from 8 below (truncate n-interrupts 4)
+            do (setf (gic-dist-reg (+ +gicd-itargetsr0+ (* intr 4))) #x01010101)))
     (dotimes (i n-interrupts)
       (setf (svref *gic-irqs* i) (make-irq :platform-number i))))
   ;; Enable the distributor and local CPU.
