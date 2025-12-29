@@ -50,6 +50,7 @@
 
 (defun initialize-platform ()
   (initialize-cpu)
+  (initialize-psci)
   (debug-print-line "Performing FDT scan")
   (arm64-fdt-scan nil))
 
@@ -89,5 +90,8 @@
             ((fdt-compatible-p child "allwinner,sun4i-a10-timer")
              (when (not earlyp)
                (initialize-fdt-sun4i-a10-timer node address-cells size-cells)))
+            ((fdt-compatible-p child "arm,psci-1.0")
+             (when (not earlyp)
+               (psci-register child)))
             (t
              (debug-print-line "unknown fdt node at " child " on simple-bus"))))))

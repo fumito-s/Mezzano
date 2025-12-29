@@ -1181,18 +1181,37 @@
 (define-conditional-select csel.le #b1101)
 (define-conditional-select csel.al #b1110)
 
-(define-instruction brk (imm)
-  (let ((imm-value (or (resolve-immediate imm) 0)))
-    (assert (<= 0 imm-value 65535))
-    (emit-instruction (logior #xd4200000
-                              (ash imm-value 5)))
-    (return-from instruction t)))
+(defmacro define-exception-instruction (name opc ll)
+  `(define-instruction ,name (imm)
+     (let ((imm-value (or (resolve-immediate imm) 0)))
+       (assert (<= 0 imm-value 65535))
+       (emit-instruction (logior #xd4000000
+                                 (ash ,opc 21)
+                                 (ash imm-value 5)
+                                 ,ll))
+       (return-from instruction t))))
 
-(define-instruction hlt (imm)
-  (let ((imm-value (or (resolve-immediate imm) 0)))
+(define-exception-instruction svc #b000 #b01)
+(define-exception-instruction hvc #b000 #b10)
+(define-exception-instruction smc #b000 #b11)
+(define-exception-instruction brk #b001 #b00)
+(define-exception-instruction hlt #b010 #b00)
+
+(define-instruction movk (dst value &optional (shift 0))
+  (check-register-class dst :gpr-64 :gpr-32)
+  (let ((is-64-bit (eql (register-class dst) :gpr-64))
+        (imm-value (or (resolve-immediate value) 0)))
     (assert (<= 0 imm-value 65535))
-    (emit-instruction (logior #xd4400000
-                              (ash imm-value 5)))
+    (if is-64-bit
+        (assert (member shift '(0 16 32 48)))
+        (assert (member shift '(0 16))))
+    (emit-instruction (logior (if is-64-bit
+                                  #x80000000
+                                  #x00000000)
+                              #x72800000
+                              (ash (truncate shift 16) 21)
+                              (ash (ldb (byte 16 0) imm-value) 5)
+                              (ash (register-number dst) +rd-shift+)))
     (return-from instruction t)))
 
 (define-instruction movn (dst value &optional (shift 0))

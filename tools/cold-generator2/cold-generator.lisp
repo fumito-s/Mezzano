@@ -25,6 +25,7 @@
   '("supervisor/entry.lisp"
     ("supervisor/x86-64/cpu.lisp" :x86-64)
     ("supervisor/arm64/cpu.lisp" :arm64)
+    ("supervisor/arm64/psci.lisp" :arm64)
     "supervisor/interrupts.lisp"
     ("supervisor/x86-64/interrupts.lisp" :x86-64)
     ("supervisor/arm64/interrupts.lisp" :arm64)
