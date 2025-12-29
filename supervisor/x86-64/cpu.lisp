@@ -1030,8 +1030,7 @@ This is a one-shot timer and must be reset after firing."
 
 (defun detect-secondary-cpus ()
   (let ((bsp-apic-id (cpu-apic-id *bsp-cpu*))
-        (madt (acpi-get-table 'acpi-madt-table-p))
-        (did-warn nil))
+        (madt (acpi-get-table 'acpi-madt-table-p)))
     (when madt
       ;; Walk the ACPI MADT table looking for enabled CPUs.
       (dotimes (i (sys.int::simple-vector-length
@@ -1041,9 +1040,6 @@ This is a one-shot timer and must be reset after firing."
                      (logbitp +acpi-madt-processor-lapic-flag-enabled+
                               (acpi-madt-processor-lapic-flags entry))
                      (not (eql (acpi-madt-processor-lapic-apic-id entry) bsp-apic-id)))
-            (when (not did-warn)
-              (debug-print-line "### Multiple CPUs detected. SMP support is currently experimental and unreliable.")
-              (setf did-warn t))
             (register-secondary-cpu (acpi-madt-processor-lapic-apic-id entry))))))))
 
 (defun boot-secondary-cpus ()

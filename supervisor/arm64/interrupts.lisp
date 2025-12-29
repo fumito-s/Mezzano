@@ -122,23 +122,20 @@
          " ESR: " (%esr-el1)
          " FAR: " (%far-el1)))
 
-(sys.int::defglobal *page-fault-hook*)
-
 (defun local-cpu-page-fault-hook ()
-  (when (boundp '*page-fault-hook*)
-    *page-fault-hook*))
+  (arm64-cpu-page-fault-hook (local-cpu-info)))
 
 (defun (setf local-cpu-page-fault-hook) (value)
-  (setf *page-fault-hook* value))
+  (setf (arm64-cpu-page-fault-hook (local-cpu-info)) value))
 
 (defun %page-fault-handler (interrupt-frame fault-addr reason)
-  (when (and (boundp '*page-fault-hook*)
-             *page-fault-hook*)
-    ;; FIXME: This doesn't work when the hook was bound in SP_EL0,
-    ;; it doesn't switch back to EL0, which will leave SP_EL1 pointing at the EL0
-    ;; stack. Even if it did switch back to SP_EL0 it would also need to restore
-    ;; the original SP_EL1.
-    (funcall *page-fault-hook* interrupt-frame reason fault-addr nil))
+  (let ((hook (local-cpu-page-fault-hook)))
+    (when hook
+      ;; FIXME: This doesn't work when the hook was bound in SP_EL0,
+      ;; it doesn't switch back to EL0, which will leave SP_EL1 pointing at the EL0
+      ;; stack. Even if it did switch back to SP_EL0 it would also need to restore
+      ;; the original SP_EL1.
+      (funcall hook interrupt-frame reason fault-addr nil)))
   (cond ((not *paging-disk*)
          (unhandled-interrupt interrupt-frame "early-page-fault"))
         ((logtest #x3C0 (interrupt-frame-raw-register interrupt-frame :rflags))

@@ -165,9 +165,17 @@
                   ""
                   " (stale)")))))
 
+#+x86-64
 (defmethod print-object ((object mezzano.supervisor::cpu) stream)
   (print-unreadable-object (object stream :type t :identity t)
     (format stream "~D ~S" (mezzano.supervisor::cpu-apic-id object) (mezzano.supervisor::cpu-state object))))
+
+#+arm64
+(defmethod print-object ((object mezzano.supervisor::arm64-cpu) stream)
+  (print-unreadable-object (object stream :type t :identity t)
+    (format stream "~D ~S"
+            (mezzano.supervisor::arm64-cpu-cpu-id object)
+            (mezzano.supervisor::arm64-cpu-state object))))
 
 (defmethod print-object ((object mezzano.delimited-continuations:delimited-continuation) stream)
   (print-unreadable-object (object stream :type t :identity t)

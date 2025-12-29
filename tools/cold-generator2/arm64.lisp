@@ -30,9 +30,11 @@
                          *funcallable-instance-trampoline*
                          :area :wired-function
                          :name (env:translate-symbol environment 'sys.int::%%funcallable-instance-trampoline%%)))
-  (setf (env:cross-symbol-value environment 'sys.int::*bsp-wired-stack*)
+  (setf (env:cross-symbol-value environment 'mezzano.supervisor::*bsp-wired-stack*)
         (env:make-stack environment (* 128 1024)))
-  (setf (env:cross-symbol-value environment 'sys.int::*arm64-exception-vector*)
+  (setf (env:cross-symbol-value environment 'mezzano.supervisor::*bsp-cpu*)
+        (env:make-structure environment 'mezzano.supervisor::arm64-cpu))
+  (setf (env:cross-symbol-value environment 'mezzano.supervisor::*arm64-exception-vector*)
         (env:compile-lap environment
                          (loop repeat (/ (+ 2048 +exception-vector-alignment+) 8) ; for alignment
                                collect `(:d64/le 0))
@@ -40,14 +42,15 @@
                          :name 'sys.int::*arm64-exception-vector*)))
 
 (defmethod ser:post-serialize-image-for-target (image environment (target (eql :arm64)))
-  (let* ((ex-vec (env:cross-symbol-value environment 'sys.int::*arm64-exception-vector*))
+  (let* ((ex-vec (env:cross-symbol-value environment 'mezzano.supervisor::*arm64-exception-vector*))
          (ex-vec-val (ser:serialize-object ex-vec image environment))
          (ex-vec-addr (+ ex-vec-val (- sys.int::+tag-object+) 8)) ; slot 0
          ;; Base address of the exception vector must be properly aligned.
          (ex-vec-base (util:align-up ex-vec-addr +exception-vector-alignment+))
          (offset (- ex-vec-base ex-vec-addr))
          (slot-offset (/ offset 8)))
-    (setf (ser::image-symbol-value image environment 'sys.int::*arm64-exception-vector-base*)
+    (setf (ser::image-symbol-value image environment
+                                   'mezzano.supervisor::*arm64-exception-vector-base*)
           (ser::serialize-object ex-vec-base image environment))
     (labels (((setf mref32) (value base index)
                (if (evenp index)

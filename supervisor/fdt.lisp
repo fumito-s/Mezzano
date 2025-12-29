@@ -70,6 +70,11 @@
     (panic "No FDT provided"))
   (+ *fdt* (memref-ub32/be (+ *fdt* +fdt-header-structure-offset+))))
 
+(defun fdt-boot-cpuid ()
+  (when (not *fdt*)
+    (panic "No FDT provided"))
+  (memref-ub32/be (+ *fdt* +fdt-header-boot-cpuid-offset+)))
+
 (defun fdt-node-contents (node)
   (let ((name-len (fdt-node-name-len node)))
     (+ node 4 (align-up (1+ name-len) 4))))

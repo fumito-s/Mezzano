@@ -1,13 +1,37 @@
 (in-package :mezzano.supervisor)
 
-(sys.int::defglobal sys.int::*arm64-exception-vector*)
-(sys.int::defglobal sys.int::*arm64-exception-vector-base*)
-(sys.int::defglobal sys.int::*bsp-wired-stack*)
+(sys.int::defglobal *arm64-exception-vector*)
+(sys.int::defglobal *arm64-exception-vector-base*)
+(sys.int::defglobal *bsp-wired-stack*)
+(sys.int::defglobal *bsp-cpu*)
+
+(sys.int::defglobal *n-up-cpus* 1)
+(sys.int::defglobal *cpus*)
+
+(defstruct (arm64-cpu
+            (:area :wired)
+            :slot-locations)
+  self
+  (state :offline :type (member :offline :online :timed-out))
+  cpu-id
+  idle-thread
+  wired-stack
+  (sp-el1 0)
+  page-fault-hook)
 
 (defun initialize-boot-cpu ()
-  (let ((sp-el1 (+ (car sys.int::*bsp-wired-stack*) (cdr sys.int::*bsp-wired-stack*))))
-    (%load-cpu-bits sp-el1 (ash sp-el1 -1)
-                    sys.int::*arm64-exception-vector-base*))
+  (setf (arm64-cpu-self *bsp-cpu*) *bsp-cpu*)
+  (setf (arm64-cpu-state *bsp-cpu*) :online)
+  (setf (arm64-cpu-idle-thread *bsp-cpu*)
+        sys.int::*bsp-idle-thread*)
+  (setf (arm64-cpu-wired-stack *bsp-cpu*) *bsp-wired-stack*)
+  (setf (arm64-cpu-sp-el1 *bsp-cpu*)
+        (+ (car *bsp-wired-stack*) (cdr *bsp-wired-stack*) -16))
+  (setf (sys.int::memref-unsigned-byte-64 (arm64-cpu-sp-el1 *bsp-cpu*))
+        (sys.int::lisp-object-address *bsp-cpu*))
+  (%load-cpu-bits (arm64-cpu-sp-el1 *bsp-cpu*)
+                  (ash (arm64-cpu-sp-el1 *bsp-cpu*) -1)
+                  *arm64-exception-vector-base*)
   (setf *cpus* '()))
 
 (defconstant +spsr-ss+ 21)
@@ -43,7 +67,8 @@
 
 (sys.int::define-lap-function local-cpu-info (())
   (:gc :no-frame :layout #*)
-  (mezzano.lap.arm64:orr :x0 :xzr :x27)
+  (mezzano.lap.arm64:orr :x9 :xzr :x27)
+  (mezzano.lap.arm64:ldr :x0 (:x9))
   (mezzano.lap.arm64:movz :x5 #.(ash 1 sys.int::+n-fixnum-bits+))
   (mezzano.lap.arm64:ret))
 
@@ -51,7 +76,8 @@
   (local-cpu-info))
 
 (defun initialize-cpu ()
-  (push-wired (local-cpu) *cpus*))
+  (setf (arm64-cpu-cpu-id *bsp-cpu*) (fdt-boot-cpuid))
+  (push-wired *bsp-cpu* *cpus*))
 
 (sys.int::define-lap-function %el0-common ()
   ;; Stack looks like:
@@ -225,24 +251,39 @@
   nil)
 
 (defun local-cpu-idle-thread ()
-  sys.int::*bsp-idle-thread*)
+  (arm64-cpu-idle-thread (local-cpu-info)))
+
+(defun register-secondary-cpu (cpu-id)
+  (let* ((idle-thread (make-ephemeral-thread #'idle-thread :runnable
+                                             :name "Idle Thread"
+                                             :priority :idle))
+         (wired-stack (%allocate-stack (* 128 1024) t))
+         (cpu (make-arm64-cpu :state :offline
+                              :cpu-id cpu-id
+                              :idle-thread idle-thread
+                              :wired-stack wired-stack
+                              :sp-el1 (+ (stack-base wired-stack)
+                                         (stack-size wired-stack)))))
+    (setf (arm64-cpu-self cpu) cpu)
+    (debug-print-line "Registered new CPU " cpu " " idle-thread " with ID " cpu-id)
+    (push-wired cpu *cpus*)))
+
+(defun detect-secondary-cpus ()
+  (let* ((boot-cpu (fdt-boot-cpuid))
+         (cpus (fdt-get-named-child-node (fdt-root) "cpus")))
+    (debug-print-line "Boot cpu is " boot-cpu)
+    (debug-print-line "cpus: " cpus)
+    (when cpus
+      (do-fdt-child-nodes (node cpus)
+        (when (or (fdt-compatible-p node "arm,arm-v8")
+                  (fdt-compatible-p node "arm,cortex-a57"))
+          (let ((id (fdt-read-u32 (fdt-get-property node "reg"))))
+            (when (not (eql id boot-cpu))
+              (register-secondary-cpu id))))))))
 
 (defun boot-secondary-cpus ()
+  (detect-secondary-cpus)
   nil)
-
-(sys.int::defglobal *n-up-cpus* 1)
-(sys.int::defglobal *cpus*)
-
-(defstruct (cpu
-             (:area :wired))
-  state
-  info-vector
-  apic-id
-  idle-thread
-  wired-stack
-  exception-stack
-  irq-stack
-  lapic-timer-active)
 
 (defun logical-core-count ()
   1)
