@@ -31,17 +31,32 @@
   (mezzano.lap.arm64:tlbi.vmalle1)
   (mezzano.lap.arm64:ret))
 
+(sys.int::define-lap-function %tlbi.vaae1 ((va))
+  (:gc :no-frame :layout #*)
+  (mezzano.lap.arm64:asr :x9 :x0 #.sys.int::+n-fixnum-bits+)
+  (mezzano.lap.arm64:tlbi.vaae1 :x9)
+  (mezzano.lap.arm64:ret))
+
+(sys.int::define-lap-function %tlbi.vmalle1is (())
+  (:gc :no-frame :layout #*)
+  (mezzano.lap.arm64:tlbi.vmalle1is)
+  (mezzano.lap.arm64:ret))
+
+(sys.int::define-lap-function %tlbi.vaae1is ((va))
+  (:gc :no-frame :layout #*)
+  (mezzano.lap.arm64:asr :x9 :x0 #.sys.int::+n-fixnum-bits+)
+  (mezzano.lap.arm64:tlbi.vaae1is :x9)
+  (mezzano.lap.arm64:ret))
+
 (defun flush-tlb-single (address)
-  (declare (ignore address))
-  ;; TODO: Flush by VA
   (%dsb.ishst)
-  (%tlbi.vmalle1)
+  (%tlbi.vaae1is (ldb (byte 44 12) address))
   (%dsb.ish)
   (%isb))
 
 (defun flush-tlb ()
   (%dsb.ishst)
-  (%tlbi.vmalle1)
+  (%tlbi.vmalle1is)
   (%dsb.ish)
   (%isb))
 
@@ -59,12 +74,12 @@
 (defun (setf page-table-entry) (value page-table &optional (index 0))
   (prog1
       (setf (sys.int::memref-unsigned-byte-64 page-table index) value)
-    (%dsb.ish)))
+    (%dc.cvau (+ page-table (* index 8)))))
 
 (defun (ext:cas page-table-entry) (old new page-table &optional (index 0))
   (prog1
       (ext:cas (sys.int::memref-unsigned-byte-64 page-table index) old new)
-    (%dsb.ish)))
+    (%dc.cvau (+ page-table (* index 8)))))
 
 (defun make-pte (frame &key writable (present t) block wired dirty copy-on-write (cache-mode :normal))
   (logior (ash frame 12)

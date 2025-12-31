@@ -230,6 +230,8 @@
 (defun quiesce-cpus-for-world-stop ()
   nil)
 
+;; TLB shootdown isn't required as ARM has cross-core TLB invalidation instructions
+
 (defun begin-tlb-shootdown ()
   nil)
 
