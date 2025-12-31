@@ -429,7 +429,9 @@
   (mezzano.lap.arm64:mrs :x9 :sctlr-el1)
   (mezzano.lap.arm64:orr :x9 :x9 #.(ash 1 12)) ; Enable icache
   (mezzano.lap.arm64:orr :x9 :x9 #.(ash 1 2))  ; Enable dcache/ucache
-  (mezzano.lap.arm64:orr :x9 :x9 #.(ash 1 3))  ; Force stack alignment
+  ;; TODO: Enable this. Not possible at the moment because
+  ;; %APPLY will briefly unalign the stack.
+  ;;(mezzano.lap.arm64:orr :x9 :x9 #.(ash 1 3))  ; Force stack alignment
   (mezzano.lap.arm64:msr :sctlr-el1 :x9)
   ;; Invalidate TLB
   (mezzano.lap.arm64:tlbi.vmalle1)
