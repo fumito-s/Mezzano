@@ -131,6 +131,7 @@
       (return-from gic-handle-interrupt))
     (cond ((< vector 16)
            ;; SGI
+           (%dsb.ish)
            (case vector
              (#.+panic-sgi-id+
               (panic-ipi-handler interrupt-frame))
@@ -171,6 +172,7 @@
   (gic-unmask-interrupt vector))
 
 (defun broadcast-ipi (vector)
+  (%dsb.ishst)
   (setf (gic-dist-reg +gicd-sgir+)
         (logior (ash 1 24) ; all-but-self
                 vector))
