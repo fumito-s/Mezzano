@@ -269,7 +269,9 @@
 (defun register-secondary-cpu (cpu-id)
   (let* ((idle-thread (make-ephemeral-thread #'%pe-entry-point
                                              :runnable
-                                             :name (cons-in-area "Idle Thread" cpu-id)
+                                             :name (sys.int::cons-in-area
+                                                    "Idle Thread" cpu-id
+                                                    :wired)
                                              :priority :idle))
          (wired-stack (%allocate-stack (* 128 1024) t))
          (cpu (make-arm64-cpu :state :offline
