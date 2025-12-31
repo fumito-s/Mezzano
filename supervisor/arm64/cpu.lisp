@@ -5,7 +5,7 @@
 (sys.int::defglobal *bsp-wired-stack*)
 (sys.int::defglobal *bsp-cpu*)
 
-(sys.int::defglobal *n-up-cpus* 1)
+(sys.int::defglobal *n-up-cpus*)
 (sys.int::defglobal *cpus*)
 
 (defstruct (arm64-cpu
@@ -32,6 +32,7 @@
   (%load-cpu-bits (arm64-cpu-sp-el1 *bsp-cpu*)
                   (ash (arm64-cpu-sp-el1 *bsp-cpu*) -1)
                   *arm64-exception-vector-base*)
+  (setf *n-up-cpus* 1)
   (setf *cpus* '()))
 
 (defconstant +spsr-ss+ 21)
@@ -222,13 +223,84 @@
   (mezzano.lap.arm64:hlt 4))
 
 (defun broadcast-panic-ipi ()
-  nil)
+  (broadcast-ipi +panic-sgi-id+))
+
+(defun panic-ipi-handler (interrupt-frame)
+  (declare (ignore interrupt-frame))
+  (loop (%arch-panic-stop)))
 
 (defun broadcast-wakeup-ipi ()
-  nil)
+  (broadcast-ipi +wakeup-sgi-id+))
 
+(sys.int::defglobal *non-quiescent-cpus-remaining*)
+
+;; FIXME: quiesce-cpus-for-world-stop needs to prevent migration across CPUs.
 (defun quiesce-cpus-for-world-stop ()
-  nil)
+  "Bring all CPUs to a consistent state to stop the world.
+Protected by the world stop lock."
+  (setf *non-quiescent-cpus-remaining* (1- *n-up-cpus*))
+  (broadcast-ipi +quiesce-sgi-id+)
+  ;; FIXME: Use WFE/SEV instead of this spin-loop.
+  (loop
+     (when (eql *non-quiescent-cpus-remaining* 0)
+       (return))
+     (sys.int::cpu-relax)))
+
+;; Save the current thread's state and switch to the CPU's idle thread.
+(defun quiesce-ipi-handler (interrupt-frame)
+  (let* ((current (current-thread))
+         (idle (local-cpu-idle-thread))
+         (was-active (not (eql current idle))))
+    (when was-active
+      (acquire-global-thread-lock)
+      ;; Return this thread to the run queue.
+      (setf (thread-state current) :runnable)
+      (push-run-queue current)
+      (preemption-timer-reset nil)
+      ;; Save thread state.
+      (save-fpu-state current)
+      (save-interrupted-state current interrupt-frame)
+      ;; Partially switch to the idle thread.
+      (setf (thread-state idle) :active))
+    ;; Have now reached a quiescent state.
+    (sys.int::%atomic-fixnum-add-symbol '*non-quiescent-cpus-remaining*
+                                        -1)
+    (when was-active
+      ;; Finally, return to the idle thread.
+      (%%switch-to-thread-common idle
+                                 idle))))
+
+;; TODO: This needs to be fixed up to prevent multiple CPUs hitting it at
+;; once. It can't currently happen because it is only used from IRQ handlers
+;; and IRQs are only sent to the BSP.
+(sys.int::defglobal *debug-magic-button-hold-variable*)
+(sys.int::defglobal *debug-magic-button-ready-variable*)
+
+(defun stop-other-cpus-for-debug-magic-button ()
+  (setf *debug-magic-button-ready-variable* (1- *n-up-cpus*)
+        *debug-magic-button-hold-variable* t)
+  (broadcast-ipi +magic-button-sgi-id+)
+  ;; Wait for other CPUs to arrive, this ensures the thread state is actually
+  ;; consistent.
+  (loop until (eql *debug-magic-button-ready-variable* 0)))
+
+(defun resume-other-cpus-for-debug-magic-button ()
+  (setf *debug-magic-button-ready-variable* (1- *n-up-cpus*)
+        *debug-magic-button-hold-variable* nil)
+  ;; Wait for other CPUs to leave, this ensures they've all seen
+  ;; the hold variable going to NIL.
+  (loop until (eql *debug-magic-button-ready-variable* 0)))
+
+(defun magic-button-ipi-handler (interrupt-frame)
+  ;; Save the current thread state so it looks approximately correct.
+  (let ((current (current-thread)))
+    (save-fpu-state current)
+    (save-interrupted-state current interrupt-frame))
+  (sys.int::%atomic-fixnum-add-symbol
+   '*debug-magic-button-ready-variable* -1)
+  (loop while *debug-magic-button-hold-variable*)
+  (sys.int::%atomic-fixnum-add-symbol
+   '*debug-magic-button-ready-variable* -1))
 
 ;; TLB shootdown isn't required as ARM has cross-core TLB invalidation instructions
 
@@ -259,12 +331,12 @@
 ;; is online, reenable interrupts, do any final registration, then fall
 ;; into the idle thread.
 (defun %pe-entry-point ()
+  (configure-gic-cpu)
   (let ((old (sys.int::cas (arm64-cpu-state (local-cpu)) :offline :online)))
     (when (not (eql old :offline))
       ;; The system decided that this CPU failed to come up for some reason.
       (loop
-         (%arch-panic-stop))))
-  (debug-print-line "CPU ONLINE")
+        (%arch-panic-stop))))
   (increment-n-running-cpus)
   (idle-thread))
 
@@ -304,10 +376,32 @@
 
 (sys.int::defglobal *pe-bootstrap-address*)
 
+(defun boot-cpu (cpu)
+  (debug-print-line "Booting CPU " cpu "/" (arm64-cpu-cpu-id cpu))
+  (psci-cpu-on (arm64-cpu-cpu-id cpu) *pe-bootstrap-address*
+               (sys.int::lisp-object-address cpu))
+  ;; Wait for the CPU to come up.
+  (let ((start-time (get-internal-run-time)))
+    (loop
+      (when (eql (arm64-cpu-state cpu) :online)
+        (return))
+      (when (> (- (get-internal-run-time) start-time)
+               (* 5 internal-time-units-per-second))
+        (sys.int::cas (arm64-cpu-state cpu) :offline :timed-out)
+        (return))))
+  (case (arm64-cpu-state cpu)
+    (:online
+     (incf *n-up-cpus*)
+     (debug-print-line "CPU " cpu "/" (arm64-cpu-cpu-id cpu) " booted"))
+    (t
+     (debug-print-line "CPU " cpu "/" (arm64-cpu-cpu-id cpu) " timed out"))))
+
 (defun boot-secondary-cpus ()
   (setf *pe-bootstrap-address* (initialize-pe-bootstrap-data))
   (detect-secondary-cpus)
-  nil)
+  (dolist (cpu *cpus*)
+    (when (eql (arm64-cpu-state cpu) :offline)
+      (boot-cpu cpu))))
 
 (defun logical-core-count ()
   (length *cpus*))
@@ -317,12 +411,6 @@
   nil)
 
 (defun preemption-timer-remaining ()
-  nil)
-
-(defun stop-other-cpus-for-debug-magic-button ()
-  nil)
-
-(defun resume-other-cpus-for-debug-magic-button ()
   nil)
 
 (defun arch-pre-panic ()

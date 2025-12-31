@@ -1019,7 +1019,7 @@ This is a one-shot timer and must be reset after firing."
          (return))
        (when (> (- (get-internal-run-time) start-time)
                 (* 5 internal-time-units-per-second))
-         (sys.int::cas (cpu-state (local-cpu)) :offline :timed-out)
+         (sys.int::cas (cpu-state cpu) :offline :timed-out)
          (return))))
   (case (cpu-state cpu)
     (:online

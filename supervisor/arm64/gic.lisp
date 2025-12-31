@@ -42,6 +42,12 @@
 (sys.int::defglobal *gic-cpu-interface-base*)
 (sys.int::defglobal *gic-irqs*)
 
+;;; Indicies of our software-generated interrupts
+(defconstant +panic-sgi-id+ 1)
+(defconstant +wakeup-sgi-id+ 2)
+(defconstant +quiesce-sgi-id+ 3)
+(defconstant +magic-button-sgi-id+ 4)
+
 (defun gic-dist-reg (index)
   (physical-memref-unsigned-byte-32 (+ *gic-distributor-base* index)))
 
@@ -90,8 +96,17 @@
             do (setf (gic-dist-reg (+ +gicd-itargetsr0+ (* intr 4))) #x01010101)))
     (dotimes (i n-interrupts)
       (setf (svref *gic-irqs* i) (make-irq :platform-number i))))
-  ;; Enable the distributor and local CPU.
+  ;; Enable the distributor.
   (setf (gic-dist-reg +gicd-ctlr+) 1)
+  (configure-gic-cpu)
+  ;; Unmask our various IPIs
+  (gic-unmask-interrupt +panic-sgi-id+)
+  (gic-unmask-interrupt +wakeup-sgi-id+)
+  (gic-unmask-interrupt +quiesce-sgi-id+)
+  (gic-unmask-interrupt +magic-button-sgi-id+))
+
+(defun configure-gic-cpu ()
+  ;; Enable the local CPU.
   (setf (gic-cpui-reg +gicc-ctlr+) 1)
   ;; Allow all priority levels.
   (setf (gic-cpui-reg +gicc-pmr+) #xFF))
@@ -114,10 +129,29 @@
     (when (eql vector 1023)
       ;; Spurious interrupt.
       (return-from gic-handle-interrupt))
-    (irq-deliver interrupt-frame (svref *gic-irqs* vector))
+    (cond ((< vector 16)
+           ;; SGI
+           (case vector
+             (#.+panic-sgi-id+
+              (panic-ipi-handler interrupt-frame))
+             (#.+wakeup-sgi-id+
+              ;; don't need to do anything, we'll maybe-preempt after eoi
+              nil)
+             (#.+quiesce-sgi-id+
+              ;; nothing, handled later
+              nil)
+             (#.+magic-button-sgi-id+
+              (magic-button-ipi-handler interrupt-frame))
+             (t (debug-print-line "Received unknown SGI " vector))))
+          (t
+           ;; Normal external IRQ
+           (irq-deliver interrupt-frame (svref *gic-irqs* vector))))
     ;; Send EOI.
     (setf (gic-cpui-reg +gicc-eoir+) iar)
-    (maybe-preempt-via-interrupt interrupt-frame)))
+    (cond ((eql vector +quiesce-sgi-id+)
+           (quiesce-ipi-handler interrupt-frame))
+          (t
+           (maybe-preempt-via-interrupt interrupt-frame)))))
 
 (defun platform-irq (number)
   (cond ((<= 0 number 1023)
@@ -135,3 +169,9 @@
 
 (defun platform-unmask-irq (vector)
   (gic-unmask-interrupt vector))
+
+(defun broadcast-ipi (vector)
+  (setf (gic-dist-reg +gicd-sgir+)
+        (logior (ash 1 24) ; all-but-self
+                vector))
+  nil)
