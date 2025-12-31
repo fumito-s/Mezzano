@@ -47,6 +47,12 @@
   (mezzano.lap.arm64:msr :daifclr #b1111)
   (mezzano.lap.arm64:ret))
 
+;; TODO: Use SEV/WFE hints
+(sys.int::define-lap-function sys.int::cpu-relax (())
+  (:gc :no-frame :layout #*)
+  (mezzano.lap.arm64:yield)
+  (mezzano.lap.arm64:ret))
+
 (sys.int::define-lap-function %arch-panic-stop (())
   (:gc :no-frame :layout #*)
   (mezzano.lap.arm64:wfi)
