@@ -27,6 +27,11 @@
   (assert (< offset (function-pool-size function)))
   (%object-ref-t function (+ (function-pool-base function) offset)))
 
+(defun (setf function-pool-object) (value function offset)
+  (check-type offset (integer 0))
+  (assert (< offset (function-pool-size function)))
+  (setf (%object-ref-t function (+ (function-pool-base function) offset)) value))
+
 (defun function-code-byte (function offset)
   (%type-check function +object-tag-function+ 'compiled-function)
   (check-type offset (integer 0))

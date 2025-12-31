@@ -34,11 +34,13 @@
 (defun flush-tlb-single (address)
   (declare (ignore address))
   ;; TODO: Flush by VA
+  (%dsb.ishst)
   (%tlbi.vmalle1)
   (%dsb.ish)
   (%isb))
 
 (defun flush-tlb ()
+  (%dsb.ishst)
   (%tlbi.vmalle1)
   (%dsb.ish)
   (%isb))

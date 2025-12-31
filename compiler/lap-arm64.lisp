@@ -370,9 +370,32 @@
       (list `(subs ,dst ,s1 ,s2-imm))))
 
 (define-macro-instruction mov (dst src)
-  (if (register-class src)
-      (list `(orr ,dst :xzr ,src))
-      (list `(movz ,dst ,src))))
+  (cond ((register-class src)
+         (if (eql dst :sp)
+             (list `(add ,dst ,src 0))
+             (list `(orr ,dst :xzr ,src))))
+        ((encodable-bit-mask-p src 64)
+         (list `(orr ,dst :xzr ,src)))
+        ((integerp src)
+         (cond ((zerop src)
+                (list `(orr ,dst :xzr 0)))
+               (t
+                (loop
+                  with did-movz = nil
+                  for value = src then (ash value -16)
+                  for shift from 0 by 16
+                  while (not (zerop value))
+                  if (logtest value #xFFFF)
+                    collect (cond (did-movz
+                                   `(movk ,dst ,(ldb (byte 16 0) value) ,shift))
+                                  (t
+                                   (setf did-movz t)
+                                   `(movz ,dst ,(ldb (byte 16 0) value) ,shift)))))))
+        (t
+         (list `(movz ,dst ,src)))))
+
+(define-macro-instruction cmp (dst src)
+  (list `(subs :xzr ,dst ,src)))
 
 (define-macro-instruction lsl (dst src count)
   (if (register-class count)
@@ -1265,15 +1288,19 @@
   ;; op0, op1, crn, crm, op2.
   '((:nzcv             (#b11 #b011 #b0100 #b0010 #b000))
     (:spsel            (#b11 #b000 #b0100 #b0010 #b000))
+    (:current-el       (#b11 #b000 #b0100 #b0010 #b010))
     (:sp-el0           (#b11 #b000 #b0100 #b0001 #b000))
     (:elr-el1          (#b11 #b000 #b0100 #b0000 #b001))
+    (:elr-el2          (#b11 #b100 #b0100 #b0000 #b001))
     (:esr-el1          (#b11 #b000 #b0101 #b0010 #b000))
     (:far-el1          (#b11 #b000 #b0110 #b0000 #b000))
     (:spsr-el1         (#b11 #b000 #b0100 #b0000 #b000))
+    (:spsr-el2         (#b11 #b100 #b0100 #b0000 #b000))
     (:vbar-el1         (#b11 #b000 #b1100 #b0000 #b000))
     (:ttbr0-el1        (#b11 #b000 #b0010 #b0000 #b000))
     (:ttbr1-el1        (#b11 #b000 #b0010 #b0000 #b001))
     (:tcr-el1          (#b11 #b000 #b0010 #b0000 #b010))
+    (:hcr-el2          (#b11 #b100 #b0001 #b0001 #b000))
     (:daif             (#b11 #b011 #b0100 #b0010 #b001))
     (:cntfrq-el0       (#b11 #b011 #b1110 #b0000 #b000))
     (:cntkctl-el1      (#b11 #b000 #b1110 #b0001 #b000))
@@ -1326,7 +1353,9 @@
     (:sctlr-el1        (#b11 #b000 #b0001 #b0000 #b000))
     (:actlr-el1        (#b11 #b000 #b0001 #b0000 #b001))
     (:cpacr-el1        (#b11 #b000 #b0001 #b0000 #b010))
-    (:mdscr-el1        (#b10 #b000 #b0000 #b0010 #b010))))
+    (:mdscr-el1        (#b10 #b000 #b0000 #b0010 #b010))
+    (:mair-el1         (#b11 #b000 #b1010 #b0010 #b000))
+    ))
 
 (defun decode-msr-name (name)
   "Returns op0, op1, crn, crm, op2."

@@ -1000,7 +1000,7 @@
   (declare (ignore context))
   (let ((sf (ldb (byte 1 31) word))
         (hw (ldb (byte 2 21) word))
-        (opcode (aref #(a64:movn nil a64:movz :movk)
+        (opcode (aref #(a64:movn nil a64:movz a64:movk)
                       (ldb (byte 2 29) word))))
     (when (or (not opcode)
               (and (zerop sf) (not (zerop (logand hw 2)))))
@@ -1153,6 +1153,53 @@
                        :opcode 'a64:msr
                        :operands (list name rt)))))
 
+(defun dmb/dsb (context word)
+  (declare (ignore context))
+  (let* ((crn (ldb (byte 4 8) word))
+         (option (aref #(nil
+                         (a64:dmb.oshld . a64:dsb.oshld)
+                         (a64:dmb.oshst . a64:dsb.oshst)
+                         (a64:dmb.osh . a64:dsb.osh)
+                         nil
+                         (a64:dmb.nshld . a64:dsb.nshld)
+                         (a64:dmb.nshst . a64:dsb.nshst)
+                         (a64:dmb.nsh . a64:dsb.nsh)
+                         nil
+                         (a64:dmb.ishld . a64:dsb.ishld)
+                         (a64:dmb.ishst . a64:dsb.ishst)
+                         (a64:dmb.ish . a64:dsb.ish)
+                         nil
+                         (a64:dmb.ld . a64:dsb.ld)
+                         (a64:dmb.st . a64:dsb.st)
+                         (a64:dmb.sy . a64:dsb.sy))
+                       crn)))
+    (if option
+        (make-instance 'arm64-instruction
+                       :opcode (if (logbitp 5 word)
+                                   (car option)
+                                   (cdr option))
+                       :operands '())
+        (values nil :dmb/dsb))))
+
+(defun tlbi (context word)
+  (declare (ignore context))
+  (let* ((crm (ldb (byte 4 8) word))
+         (op2 (ldb (byte 3 5) word))
+         (opcode (case crm
+                   (3 (aref #(a64:tlbi.vmalle1is a64:tlbi.vae1is a64:tlbi.aside1is a64:tlbi.vaae1is
+                              nil                a64:tlbi.vale1is nil              a64:tlbi.vaale1is)
+                            op2))
+                   (7 (aref #(a64:tlbi.vmalle1 a64:tlbi.vae1 a64:tlbi.aside1 a64:tlbi.vaae1
+                              nil a64:tlbi.vale1 nil a64:tlbi.vaale1)
+                            op2)))))
+    (if opcode
+        (make-instance 'arm64-instruction
+                       :opcode opcode
+                       :operands (if (member opcode '(a64:tlbi.vmalle1 a64:tlbi.vmalle1is))
+                                     '()
+                                     (list (decode-gp64 (ldb +rt+ word)))))
+        (value nil :tlbi))))
+
 (defun system (context word)
   (cond ((eql (logand word #xFFF8F01F) #xD500401F)
          (msr-immediate context word))
@@ -1160,6 +1207,20 @@
          (hint context word))
         ((eql (logand word #xFFD00000) #xD5100000)
          (msr/mrs context word))
+        ((eql word #xD5033FDF)
+         (make-instance 'arm64-instruction :opcode 'a64:isb :operands '()))
+        ((eql (logand word #xFFFFF0DF) #xD503309F)
+         (dmb/dsb context word))
+        ((eql (logand word #xFFFFF000) #xD5088000)
+         (tlbi context word))
+        ((eql word #xD508711F)
+         (make-instance 'arm64-instruction :opcode 'a64:ic.ialluis :operands '()))
+        ((eql word #xD508751F)
+         (make-instance 'arm64-instruction :opcode 'a64:ic.iallu :operands '()))
+        ((eql (logand word #xFFFFFFE0) #xD50B7520)
+         (make-instance 'arm64-instruction
+                        :opcode 'ic.ivau
+                        :operands (list (decode-gp64 (ldb +rt+ word)))))
         (t
          (values nil :system))))
 
