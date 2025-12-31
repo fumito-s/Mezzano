@@ -257,13 +257,19 @@
 ;; is online, reenable interrupts, do any final registration, then fall
 ;; into the idle thread.
 (defun %pe-entry-point ()
+  (let ((old (sys.int::cas (arm64-cpu-state (local-cpu)) :offline :online)))
+    (when (not (eql old :offline))
+      ;; The system decided that this CPU failed to come up for some reason.
+      (loop
+         (%arch-panic-stop))))
   (debug-print-line "CPU ONLINE")
+  (increment-n-running-cpus)
   (idle-thread))
 
 (defun register-secondary-cpu (cpu-id)
   (let* ((idle-thread (make-ephemeral-thread #'%pe-entry-point
                                              :runnable
-                                             :name "Idle Thread"
+                                             :name (cons-in-area "Idle Thread" cpu-id)
                                              :priority :idle))
          (wired-stack (%allocate-stack (* 128 1024) t))
          (cpu (make-arm64-cpu :state :offline
@@ -271,8 +277,11 @@
                               :idle-thread idle-thread
                               :wired-stack wired-stack
                               :sp-el1 (+ (stack-base wired-stack)
-                                         (stack-size wired-stack)))))
+                                         (stack-size wired-stack)
+                                         -16))))
     (setf (arm64-cpu-self cpu) cpu)
+    (setf (sys.int::memref-unsigned-byte-64 (arm64-cpu-sp-el1 cpu))
+          (sys.int::lisp-object-address cpu))
     (debug-print-line "Registered new CPU " cpu " " idle-thread " with ID " cpu-id)
     (push-wired cpu *cpus*)))
 
@@ -289,12 +298,15 @@
             (when (not (eql id boot-cpu))
               (register-secondary-cpu id))))))))
 
+(sys.int::defglobal *pe-bootstrap-address*)
+
 (defun boot-secondary-cpus ()
+  (setf *pe-bootstrap-address* (initialize-pe-bootstrap-data))
   (detect-secondary-cpus)
   nil)
 
 (defun logical-core-count ()
-  1)
+  (length *cpus*))
 
 (defun preemption-timer-reset (time-remaining)
   (declare (ignore time-remaining))
@@ -496,6 +508,7 @@
   (mezzano.lap.arm64:isb)
   ;; Initialize cpu register - this is the only per-cpu context we get.
   (mezzano.lap.arm64:ldr :x27 (:object :x0 5)) ; fixme: slot sp-el0
+  (mezzano.lap.arm64:asr :x27 :x27 1) ; defixnum
   ;; Initialize thread register, start with the idle thread.
   (mezzano.lap.arm64:ldr :x28 (:object :x0 3)) ; fixme: this is the idle-thread slot, stop hard coding it.
   ;; Clear everything except a few core registers
