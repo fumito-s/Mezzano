@@ -126,7 +126,7 @@
 (defun gic-handle-interrupt (interrupt-frame)
   (let* ((iar (gic-cpui-reg +gicc-iar+))
          (vector (ldb (byte 9 0) iar)))
-    (when (eql vector 1023)
+    (when (eql (ldb (byte 23 0) iar) 1023)
       ;; Spurious interrupt.
       (return-from gic-handle-interrupt))
     (cond ((< vector 16)
@@ -146,7 +146,10 @@
              (t (debug-print-line "Received unknown SGI " vector))))
           (t
            ;; Normal external IRQ
-           (irq-deliver interrupt-frame (svref *gic-irqs* vector))))
+           (let ((irq (svref *gic-irqs* vector)))
+             (if irq
+                 (irq-deliver interrupt-frame irq)
+                 (debug-print-line "Received interrupt " vector " but no irq object?")))))
     ;; Send EOI.
     (setf (gic-cpui-reg +gicc-eoir+) iar)
     (cond ((eql vector +quiesce-sgi-id+)
