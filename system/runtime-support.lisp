@@ -2,8 +2,6 @@
 
 (in-package :mezzano.internals)
 
-(setf mezzano.lap:*function-reference-resolver* #'function-reference)
-
 (defstruct function-info
   compiler-macro
   inline-form

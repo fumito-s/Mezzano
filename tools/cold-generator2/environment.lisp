@@ -498,18 +498,13 @@
 (defun compile-lap (environment code &key (area :pinned) name)
   "Compile a list of LAP code as a function."
   (multiple-value-bind (mc constants fixups symbols gc-info)
-      (let ((mezzano.lap:*function-reference-resolver*
-             (lambda (name)
-               ;; Translate function-reference names from host names to
-               ;; names in the environment.
-               (function-reference environment (translate-symbol environment name)))))
-        (mezzano.lap:perform-assembly-using-target
-         (mezzano.compiler::canonicalize-target (environment-target environment))
-         code
-         :base-address 16
-         :initial-symbols (list '(nil . :fixup)
-                                '(t . :fixup))
-         :info (list name nil)))
+      (mezzano.lap:perform-assembly-using-target
+       (mezzano.compiler::canonicalize-target (environment-target environment))
+       code
+       :base-address 16
+       :initial-symbols (list '(nil . :fixup)
+                              '(t . :fixup))
+       :info (list name nil))
     (values
      (make-function environment mc gc-info constants fixups area)
      symbols)))

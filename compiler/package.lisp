@@ -115,7 +115,6 @@
            #:*current-address*
            #:note-fixup
            #:note-variably-sized-instruction
-           #:*function-reference-resolver*
            #:label
            #:make-label
            #:label-name

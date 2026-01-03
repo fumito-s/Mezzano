@@ -233,8 +233,7 @@
              `(:constant-address ,(second address))))
     (:function
      (values :pc :pc
-             `(:constant-address ,(funcall mezzano.lap:*function-reference-resolver*
-                                           (second address)))))
+             `(:constant-address ,(sys.int::function-reference (second address)))))
     (:symbol-global-cell
      (values :pc :pc
              `(:constant-address ,(mezzano.runtime::symbol-global-value-cell

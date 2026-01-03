@@ -411,7 +411,9 @@ Remaining values describe the effective address: base index scale disp rip-relat
         ((and (= (length form) 2)
               (eql (first form) :function))
          ;; Transform (:function foo) into (:rip (:constant-address (fref foo)))
-         (values nil nil nil nil (list :constant-address (funcall mezzano.lap:*function-reference-resolver* (second form))) t))
+         (values nil nil nil nil (list :constant-address (sys.int::function-reference
+                                                          (second form)))
+                 t))
         ((and (= (length form) 2)
               (eql (first form) :symbol-global-cell))
          ;; Transform (:symbol-global-cell foo) into (:rip (:constant-address (fref foo)))
@@ -805,7 +807,7 @@ Remaining values describe the effective address: base index scale disp rip-relat
 (defmacro named-call (dst opcode)
   `(when (and (consp ,dst)
               (eql (first ,dst) :named-call))
-     (let ((fref (funcall mezzano.lap:*function-reference-resolver* (second ,dst))))
+     (let ((fref (sys.int::function-reference (second ,dst))))
        ;; Named direct jump to an FREF.
        ;; Make sure to add the FREF to the constant pool so the GC is aware
        (mezzano.lap:add-to-constant-pool fref)
