@@ -912,26 +912,34 @@
 (define-addsub-instruction sub  1 nil)
 (define-addsub-instruction subs 1 t)
 
-(define-instruction adc (dst lhs rhs)
-  (let* ((dst-class (register-class dst))
-         (is-64-bit (member dst-class '(:gpr-64 :xzr)))
-         (sf (if is-64-bit
-                 #x80000000
-                 #x00000000)))
-    (cond (is-64-bit
-           (check-register-class dst :gpr-64 :xzr)
-           (check-register-class lhs :gpr-64 :xzr)
-           (check-register-class rhs :gpr-64 :xzr))
-          (t
-           (check-register-class dst :gpr-32 :wzr)
-           (check-register-class lhs :gpr-32 :wzr)
-           (check-register-class rhs :gpr-32 :wzr)))
-    (emit-instruction (logior sf
-                              #x1A000000
-                                     (ash (register-number rhs) +rm-shift+)
-                                     (ash (register-number lhs) +rn-shift+)
-                                     (ash (register-number dst) +rd-shift+)))
-    (return-from instruction t)))
+(defmacro define-addsub-carry-instruction (name op sflag)
+  `(define-instruction ,name (dst lhs rhs)
+     (let* ((dst-class (register-class dst))
+            (is-64-bit (member dst-class '(:gpr-64 :xzr)))
+            (sf (if is-64-bit
+                    #x80000000
+                    #x00000000)))
+       (cond (is-64-bit
+              (check-register-class dst :gpr-64 :xzr)
+              (check-register-class lhs :gpr-64 :xzr)
+              (check-register-class rhs :gpr-64 :xzr))
+             (t
+              (check-register-class dst :gpr-32 :wzr)
+              (check-register-class lhs :gpr-32 :wzr)
+              (check-register-class rhs :gpr-32 :wzr)))
+       (emit-instruction (logior sf
+                                 ,(ash op 30)
+                                 ,(ash sflag 29)
+                                 #x1A000000
+                                 (ash (register-number rhs) +rm-shift+)
+                                 (ash (register-number lhs) +rn-shift+)
+                                 (ash (register-number dst) +rd-shift+)))
+       (return-from instruction t))))
+
+(define-addsub-carry-instruction adc  0 0)
+(define-addsub-carry-instruction adcs 0 1)
+(define-addsub-carry-instruction sbc  1 0)
+(define-addsub-carry-instruction sbcs 1 1)
 
 (defun shifted-mask-p (value)
   (let ((v (logior value (1- value))))

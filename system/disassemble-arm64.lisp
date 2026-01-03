@@ -500,6 +500,22 @@
                      :opcode opcode
                      :operands (list rd rn rm)))))
 
+(defun add/sub-with-carry (context word)
+  (declare (ignore context))
+  (let* ((sf (logbitp 31 word))
+         (op (logbitp 30 word))
+         (s (logbitp 29 word))
+         (rm (decode-gp (ldb +rm+ word) :sf sf))
+         (rn (decode-gp (ldb +rn+ word) :sf sf))
+         (rd (decode-gp (ldb +rd+ word) :sf sf)))
+    (if (zerop (ldb (byte 6 10) word))
+        (make-instance 'arm64-instruction
+                       :opcode (if op
+                                   (if s 'a64:sbcs 'a64:sbc)
+                                   (if s 'a64:adcs 'a64:adc))
+                       :operands (list rd rn rm))
+        (values nil :add/sub-with-carry))))
+
 (defun data-processing-register (context word)
   (let ((op0 (ldb (byte 1 30) word))
         (op1 (ldb (byte 1 28) word))
@@ -516,7 +532,7 @@
           ((and (eql op1 0) (eql (logand op2 #x9) 9))
            (add/sub-extended-register context word))
           ((and (eql op1 1) (eql op2 0))
-           (values nil :add/sub-with-carry))
+           (add/sub-with-carry context word))
           ((and (eql op1 1) (eql op2 2) (eql op3 0))
            (values nil :conditional-compare-register))
           ((and (eql op1 1) (eql op2 2) (eql op3 1))
@@ -1264,7 +1280,7 @@
     (make-instance 'arm64-instruction
                    :opcode opcode
                    :operands `(,(decode-gp (ldb +rt+ word) :sf sf)
-                               (:pc ,(ash (int::sign-extend (ldb (byte 19 5) word) 19) 4))))))
+                               (:pc ,(* (int::sign-extend (ldb (byte 19 5) word) 19) 4))))))
 
 (defun branches-exceptions-system (context word)
   (let ((op0 (ldb (byte 3 29) word))
