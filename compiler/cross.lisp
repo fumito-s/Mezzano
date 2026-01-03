@@ -31,6 +31,13 @@
            :*features*
            :compile
            :*macroexpand-hook*
+           :make-load-form
+           :*compile-verbose*
+           :*compile-print*
+           :*compile-file-pathname*
+           :*compile-file-truename*
+           :compile-file-pathname
+           :compile-file
            :constantp
            :array-rank-limit
            :array-dimension-limit

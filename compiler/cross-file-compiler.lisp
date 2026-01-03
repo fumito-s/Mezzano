@@ -1,5 +1,11 @@
 (in-package :mezzano.compiler)
 
+(defvar *compile-verbose* t)
+(defvar *compile-print* t)
+
+(defvar *compile-file-pathname* nil)
+(defvar *compile-file-truename* nil)
+
 (defvar sys.int::*top-level-form-number* nil)
 
 (defvar *output-fasl*)
