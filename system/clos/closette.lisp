@@ -1016,7 +1016,6 @@ Other arguments are included directly."
                (sys.int::layout-instance-slots layout-b))))
 
 (defun compute-class-heap-size (class instance-slots)
-  (declare (notinline typep)) ; bootstrap hack.
   (cond ((and (endp instance-slots)
               (typep class 'funcallable-standard-class))
          ;; Funcallable instances must always be at least

@@ -640,7 +640,6 @@
 
 ;;; This is annoyingly incomplete and isn't particularly well integrated.
 (defun subtypep (type-1 type-2 &optional environment)
-  (declare (notinline typep)) ; ### Boostrap hack.
   (when (equal type-1 type-2)
     (return-from subtypep (values t t)))
   (when (typep type-2 'class)
@@ -816,7 +815,6 @@
                             (known-type-p t2 environment)))))))
 
 (defun subclassp (class-1 class-2)
-  (declare (notinline typep)) ; ### Boostrap hack.
   (let ((c1 (if (typep class-1 'class)
                 class-1
                 (find-class class-1 nil))))
@@ -831,7 +829,6 @@
                 :test #'eq))))
 
 (defun typep (object type-specifier &optional environment)
-  (declare (notinline find-class)) ; ### Boostrap hack.
   (when (or (eql type-specifier 'values)
             (and (consp type-specifier)
                  (member (first type-specifier) '(values function))))

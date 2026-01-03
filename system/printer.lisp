@@ -325,10 +325,7 @@
      (write-character object stream))
     ((and function (not mezzano.delimited-continuations:delimited-continuation))
      (cond ((and (not *print-safe*)
-                 (locally
-                     ;; ### Bootstrap hack.
-                     (declare (notinline typep))
-                   (typep object 'mezzano.clos:funcallable-standard-object)))
+                 (typep object 'mezzano.clos:funcallable-standard-object))
             (print-object object stream))
            (t (let ((name (function-name object)))
                 ;; So that only one space is printed if there is no name.

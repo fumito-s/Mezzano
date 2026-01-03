@@ -859,7 +859,6 @@
                                          collect `(elt ,var ,iter)))))))
 
 (defun map (result-type function first-sequence &rest more-sequences)
-  (declare (notinline typep)) ; bootstrap hack
   (let* ((sequences (cons first-sequence more-sequences))
          (n-results (reduce 'min (mapcar 'length sequences))))
     (flet ((map-body (accum-fn)

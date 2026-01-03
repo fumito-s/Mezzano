@@ -13,7 +13,6 @@
 ;; form using the aforementioned temporaries with which to perform an atomic read of place
 ;; form using the aforementioned temporaries with which to perform an atomic write of place
 (defun get-cas-expansion (place &optional environment)
-  (declare (notinline typep)) ; bootstrap hack
   (let ((expansion (macroexpand place environment)))
     (cond ((symbolp expansion)
            ;; Lexical variables would be ok to cas (captured variables, etc),
