@@ -319,6 +319,7 @@
   name)
 
 (defun convert-structure-definition-direct-slots (sdef)
+  (declare (notinline find-class)) ; bootstrap hack
   (let* ((direct-slots (remove-if (lambda (slot)
                                     (and (structure-definition-parent sdef)
                                          (find (structure-slot-definition-name slot)
@@ -349,6 +350,7 @@
                  new))))
 
 (defun convert-structure-definition-effective-slots (sdef)
+  (declare (notinline find-class)) ; bootstrap hack
   (let* ((s-e-s-d (find-class 'mezzano.clos::structure-effective-slot-definition))
          (s-e-s-d-layout (mezzano.runtime::instance-access-by-name s-e-s-d 'mezzano.clos::slot-storage-layout)))
     (loop
@@ -386,6 +388,7 @@
      finally (return instance-slots)))
 
 (defun populate-struct-class-from-structure-defintion (new-class sdef)
+  (declare (notinline find-class)) ; bootstrap hack
   (let* ((parent (structure-definition-parent sdef))
          (parent-class (or (and parent (%defstruct parent))
                            (find-class 'structure-object))))
@@ -423,6 +426,7 @@
           (structure-definition-has-standard-constructor sdef))))
 
 (defun convert-structure-definition-to-class (sdef source-location)
+  (declare (notinline find-class)) ; bootstrap hack
   ;; CLOS might not be fully initialized at this point,
   ;; construct the new class by hand.
   (let* ((s-c (find-class 'structure-class))
@@ -479,6 +483,7 @@
                 (mezzano.runtime::instance-access-by-name existing-slot 'mezzano.clos::initform)))))
 
 (defun structure-definition-trivially-compatible-p (existing-structure-class sdef)
+  (declare (notinline find-class)) ; bootstrap hack
   (let* ((parent (structure-definition-parent sdef))
          (parent-class (or (and parent (%defstruct parent))
                            (find-class 'structure-object))))
@@ -853,6 +858,7 @@ VALUE may be nil to make the fref unbound."
     (t t)))
 
 (defun get-structure-type (name &optional (errorp t))
+  (declare (notinline typep)) ; bootstrap hack
   (cond ((typep name 'structure-class)
          name)
         (t

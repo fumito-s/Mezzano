@@ -223,8 +223,9 @@
 (defun check-structure-slot-definition-compatibility (existing-slot new-slot)
   (assert (eql (structure-slot-definition-name existing-slot)
                (structure-slot-definition-name new-slot)))
-  (assert (eql (structure-slot-definition-accessor existing-slot)
-               (structure-slot-definition-accessor new-slot)))
+  ;; Not actually needed, the file-compiler just sets this to nil.
+  ;;(assert (eql (structure-slot-definition-accessor existing-slot)
+  ;;             (structure-slot-definition-accessor new-slot)))
   ;; FIXME: This should be a proper type= test.
   (assert (equal (structure-slot-definition-type existing-slot)
                  (structure-slot-definition-type new-slot)))

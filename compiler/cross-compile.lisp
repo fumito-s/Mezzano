@@ -41,7 +41,12 @@
    (layout :initarg :layout :accessor structure-definition-layout)
    (sealed :initarg :sealed :reader structure-definition-sealed)
    (docstring :initarg :docstring :reader structure-definition-docstring)
-   (has-standard-constructor :initarg :has-standard-constructor :reader structure-definition-has-standard-constructor)))
+   (mezzano.clos::has-standard-constructor
+    :initarg :has-standard-constructor
+    :reader structure-definition-has-standard-constructor)))
+
+(defmethod class-name ((class structure-definition))
+  (structure-definition-name class))
 
 (defun %make-struct-definition (name slots parent area size layout sealed docstring has-standard-constructor)
   (make-instance 'structure-definition
@@ -172,6 +177,8 @@
 
 (defun mask-field (bytespec integer)
   (logand integer (dpb -1 bytespec 0)))
+
+(in-package :mezzano.internals)
 
 (defparameter *char-name-alist*
   ;; C0 control characters, prioritize friendly names.
@@ -333,6 +340,8 @@
          do (return (code-char code)))
       (cl:name-char name)))
 
+(in-package :mezzano.compiler)
+
 (defmethod lookup-variable-in-environment (symbol (environment null))
   (multiple-value-bind (expansion expandedp)
       (gethash symbol cross-support::*system-symbol-macros*)
@@ -406,6 +415,8 @@
                (values form nil))))
         (t (values form nil))))
 
+(in-package :mezzano.internals)
+
 (defvar *macroexpand-hook* 'funcall)
 
 (defun constantp (form &optional env)
@@ -440,7 +451,7 @@
   fixups
   gc-info)
 
-(defstruct (cross-fref (:constructor make-cross-fref (name)))
+(defstruct (function-reference (:constructor make-cross-fref (name)))
   name)
 
 ;; FIXME: Should be a weak hash table. How to deal with setf/cas names?
@@ -453,15 +464,31 @@
 (defun sys.int::function-reference (name)
   (resolve-fref name))
 
+(defun valid-function-name-p (name)
+  (typep name '(or symbol
+                (cons (member setf cas)
+                 (cons symbol null)))))
+
 (defvar *symbol-global-value-cell-table* (make-hash-table :test #'equal :weakness :key))
 
-(defstruct (cross-symbol-global-value-cell
-             (:constructor make-cross-symbol-global-value-cell (name)))
+(in-package :mezzano.runtime)
+
+(defstruct (symbol-value-cell
+             (:constructor sys.int::make-cross-symbol-global-value-cell (name)))
   name)
+
+(in-package :mezzano.internals)
 
 (defun mezzano.runtime::symbol-global-value-cell (symbol)
   (alexandria:ensure-gethash symbol *symbol-global-value-cell-table*
                              (make-cross-symbol-global-value-cell symbol)))
+
+(defun mezzano.runtime::symbol-global-value-cell-p (object)
+  (check-type object mezzano.runtime::symbol-value-cell)
+  t)
+
+(defun mezzano.runtime::symbol-value-cell-symbol (object)
+  (mezzano.runtime::symbol-value-cell-name object))
 
 (defun char-bits (char)
   (declare (ignore char))
@@ -506,7 +533,7 @@
   `(integer 0 ,most-positive-fixnum))
 
 (defun sys.int::fixnump (object)
-  (fixnump object))
+  (mezzano.compiler::fixnump object))
 
 (defun mezzano.runtime::left-shift (integer count)
   (check-type integer integer)
@@ -535,9 +562,13 @@
             (pathname-name p)
             (pathname-type p))))
 
+(in-package :mezzano.compiler)
+
 (defun function-inline-info (name)
   (values (eql (gethash name cross-support::*inline-modes*) t)
           (gethash name cross-support::*inline-forms*)))
+
+(in-package :mezzano.internals)
 
 (defun sys.int::convert-structure-class-to-structure-definition (def)
   (check-type def sys.int::structure-definition)
@@ -555,6 +586,10 @@
   (:method ((class sys.int::structure-definition))
     (sys.int::structure-definition-layout class)))
 
+(defgeneric mezzano.clos:class-allocation-area (class)
+  (:method ((class sys.int::structure-definition))
+    (sys.int::structure-definition-area class)))
+
 (defgeneric mezzano.clos:slot-definition-name (slot-definition)
   (:method ((slot-definition sys.int::structure-slot-definition))
     (sys.int::structure-slot-definition-name slot-definition)))
@@ -567,9 +602,17 @@
   (:method ((slot-definition sys.int::structure-slot-definition))
     (sys.int::structure-slot-definition-location slot-definition)))
 
+(defgeneric mezzano.clos:slot-definition-initform (slot-definition)
+  (:method ((slot-definition sys.int::structure-slot-definition))
+    (sys.int::structure-slot-definition-initform slot-definition)))
+
 (defgeneric mezzano.clos:structure-slot-definition-fixed-vector (slot-definition)
   (:method ((slot-definition sys.int::structure-slot-definition))
     (sys.int::structure-slot-definition-fixed-vector slot-definition)))
+
+(defgeneric mezzano.clos:structure-slot-definition-align (slot-definition)
+  (:method ((slot-definition sys.int::structure-slot-definition))
+    (sys.int::structure-slot-definition-align slot-definition)))
 
 (defun mezzano.clos:ensure-class (name &rest initargs)
   (remf initargs :source-location)

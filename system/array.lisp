@@ -173,7 +173,14 @@
     ((t) *array-t-info*)
     ((character base-char) *array-character-info*)
     ((bit) *array-bit-info*)
-    (t (if (subtypep typespec 'nil environment)
+    (t
+     ;; As a bootstrap hack to avoid calling SUBTYPEP, do two passes over this list,
+     ;; but use EQUAL to compare the types the first time.
+     (dolist (info *array-info* *array-t-info*)
+       (let ((type (specialized-array-definition-type info)))
+         (when (equal typespec type)
+           (return-from upgraded-array-info info))))
+     (if (subtypep typespec 'nil environment)
            ;; NIL promotes to T.
            *array-t-info*
            (dolist (info *array-info* *array-t-info*)

@@ -11,7 +11,8 @@
 (defmethod make-load-form ((object class) &optional environment)
   (declare (ignore environment))
   (when (not (eql (find-class (class-name object)) object))
-    (error "Cannot serialize class ~S, has no name in the current environment."))
+    (error "Cannot serialize class ~S, has no name in the current environment."
+           object))
   `(find-class ',(class-name object)))
 
 (defvar *compile-parallel* nil)
@@ -381,15 +382,16 @@ NOTE: Non-compound forms (after macro-expansion) are ignored."
 (defmethod save-one-object ((object float) omap stream)
   (declare (ignore omap))
   (etypecase object
-    (short-float
-     (write-byte +llf-short-float+ stream)
-     (save-integer (%short-float-as-integer object) stream))
     (single-float
      (write-byte +llf-single-float+ stream)
      (save-integer (%single-float-as-integer object) stream))
     (double-float
      (write-byte +llf-double-float+ stream)
-     (save-integer (%double-float-as-integer object) stream))))
+     (save-integer (%double-float-as-integer object) stream))
+    ;; Must be last for the x-compiler
+    (short-float
+     (write-byte +llf-short-float+ stream)
+     (save-integer (%short-float-as-integer object) stream))))
 
 (defmethod save-one-object ((object package) omap stream)
   (write-byte +llf-package+ stream)
@@ -448,10 +450,6 @@ NOTE: Non-compound forms (after macro-expansion) are ignored."
      (save-integer (denominator (realpart object)) stream)
      (save-integer (numerator (imagpart object)) stream)
      (save-integer (denominator (imagpart object)) stream))
-    (short-float
-     (write-byte sys.int::+llf-complex-short-float+ stream)
-     (save-integer (%short-float-as-integer (realpart object)) stream)
-     (save-integer (%short-float-as-integer (imagpart object)) stream))
     (single-float
      (write-byte sys.int::+llf-complex-single-float+ stream)
      (save-integer (%single-float-as-integer (realpart object)) stream)
@@ -459,7 +457,12 @@ NOTE: Non-compound forms (after macro-expansion) are ignored."
     (double-float
      (write-byte sys.int::+llf-complex-double-float+ stream)
      (save-integer (%double-float-as-integer (realpart object)) stream)
-     (save-integer (%double-float-as-integer (imagpart object)) stream))))
+     (save-integer (%double-float-as-integer (imagpart object)) stream))
+    ;; Must be last for the x-compiler
+    (short-float
+     (write-byte sys.int::+llf-complex-short-float+ stream)
+     (save-integer (%short-float-as-integer (realpart object)) stream)
+     (save-integer (%short-float-as-integer (imagpart object)) stream))))
 
 (defun load-hash-table-entries (hash-table entries)
   (loop
@@ -841,7 +844,6 @@ NOTE: Non-compound forms (after macro-expansion) are ignored."
                (when *compile-print*
                  (let ((*print-length* 3)
                        (*print-level* 3))
-                   (declare (special *print-length* *print-level*))
                    (format t ";; ~A form ~S.~%"
                            (if *compile-parallel* "Processing" "Compiling")
                            form)))

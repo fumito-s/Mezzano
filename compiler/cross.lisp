@@ -32,6 +32,7 @@
            :compile
            :*macroexpand-hook*
            :make-load-form
+           :make-load-form-saving-slots
            :*compile-verbose*
            :*compile-print*
            :*compile-file-pathname*
@@ -164,7 +165,7 @@
 ;; TODO: Should this do something for (complex short-float)?
 (setf (find-class 'complex) (find-class 'cl:complex))
 
-(defmethod make-load-form ((object byte) &optional environment)
+(defmethod cl:make-load-form ((object byte) &optional environment)
   (declare (ignore environment))
   `(byte ',(byte-size object) ',(byte-position object)))
 

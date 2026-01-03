@@ -136,6 +136,7 @@
         value))
 
 (defun initialize-clos ()
+  (declare (notinline find-class)) ; bootstrap hack
   ;; Known important classes.
   (setf *the-class-standard-class* (find-class 'standard-class)
         *the-class-funcallable-standard-class* (find-class 'funcallable-standard-class)

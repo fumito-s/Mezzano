@@ -794,7 +794,7 @@
     (make-array dimensions :initial-contents object)))
 
 (defun read-#-struct (stream ch p)
-  (declare (notinline slot-value make-instance)) ; bootstrap hack
+  (declare (notinline slot-value make-instance typep)) ; bootstrap hack
   (ignore-#-argument ch p)
   (cond (*read-suppress*
          (read stream t nil t)

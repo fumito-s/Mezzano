@@ -212,12 +212,6 @@
   (declare (ignore name))
   t)
 
-;;; Early FIND-CLASS, needed for typep.
-(defun find-class (name &optional (errorp t))
-  (when errorp
-    (error "Early call to FIND-CLASS for ~S" name))
-  nil)
-
 ;;; Early handler bind
 (defun %handler-bind (bindings thunk)
   (declare (ignore bindings))

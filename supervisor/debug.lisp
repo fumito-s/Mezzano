@@ -430,11 +430,11 @@
   (panic "Assert error " test-form " " datum " " arguments))
 
 (defun sys.int::raise-undefined-function (&rest args sys.int::&closure fref)
-  (declare (ignore args))
+  (declare (dynamic-extent args))
   (let ((name (sys.int::%object-ref-t fref sys.int::+fref-name+)))
     (cond ((consp name)
-           (panic "Undefined function (" (symbol-name (car name)) " " (symbol-name (car (cdr name))) ")"))
-          (t (panic "Undefined function " (symbol-name name))))))
+           (panic "Undefined function (" (symbol-name (car name)) " " (symbol-name (car (cdr name))) ") called with " args))
+          (t (panic "Undefined function " (symbol-name name) " called with " args)))))
 
 (defun sys.int::make-deferred-undefined-function (fref)
   (let ((name (sys.int::%object-ref-t fref sys.int::+fref-name+)))

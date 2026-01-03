@@ -16,6 +16,7 @@
   (structure-object-class object))
 
 (defun find-struct-slot (class slot-name &optional (errorp t))
+  (declare (notinline typep)) ; bootstrap hack
   (when (typep slot-name 'mezzano.clos:structure-effective-slot-definition)
     (return-from find-struct-slot slot-name))
   (or (find slot-name (mezzano.clos:class-slots class)
