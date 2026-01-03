@@ -494,18 +494,24 @@ NOTE: Non-compound forms (after macro-expansion) are ignored."
 
 (defvar *compiling-make-load-form* nil)
 
+(defclass load-time-value-proxy ()
+  ((%form :initarg :form :reader load-time-value-proxy-form)
+   (%read-only-p :initarg :read-only-p :reader load-time-value-proxy-read-only-p)))
+
+(defmethod make-load-form ((object load-time-value-proxy) &optional environment)
+  (declare (ignore environment))
+  (load-time-value-proxy-form object))
+
+(defun compile-file-load-time-value (form read-only-p)
+  (make-instance 'load-time-value-proxy
+                 :form form
+                 :read-only-p read-only-p))
+
 (defmethod save-one-object (object omap stream)
   ;; Use COMPILE-LAMBDA here instead of COMPILE to get the correct L-T-V behaviour.
   (let* ((*compiling-make-load-form* (cons omap stream))
          (mezzano.compiler::*load-time-value-hook*
-          (lambda (form read-only-p)
-            (declare (ignore read-only-p))
-            (let ((ltv-sym (gensym "LOAD-TIME-VALUE-CELL")))
-              (compile-top-level-form `(locally
-                                           (declare (special ,ltv-sym))
-                                         (setq ,ltv-sym ,form))
-                                      nil)
-              `(sys.int::symbol-global-value ',ltv-sym)))))
+           'compile-file-load-time-value))
     (multiple-value-bind (creation-form initialization-form)
         (make-load-form object)
       (compile-top-level-form-for-value creation-form nil)
@@ -609,15 +615,6 @@ NOTE: Non-compound forms (after macro-expansion) are ignored."
         (t
          ;; Normal operation, save the forms in the command list.
          (push (list* action objects) *llf-forms*))))
-
-(defun compile-file-load-time-value (form read-only-p)
-  (declare (ignore read-only-p))
-  (let ((ltv-sym (gensym "LOAD-TIME-VALUE-CELL")))
-    (compile-top-level-form `(locally
-                                 (declare (special ,ltv-sym))
-                               (setq ,ltv-sym ,form))
-                            nil)
-    `(sys.int::symbol-global-value ',ltv-sym)))
 
 (defun compile-top-level-form (form env)
   (cond
