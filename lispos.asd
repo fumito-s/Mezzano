@@ -20,6 +20,7 @@
                (:file "compiler/compiler")
                (:file "compiler/environment")
                (:file "compiler/cross-compile")
+               (:file "compiler/cross-file-compiler")
                (:file "compiler/lap")
                (:file "compiler/lap-x86")
                (:file "compiler/lap-arm64")

@@ -1,5 +1,7 @@
 ;;;; Various packages.
 
+;; Important! This file must be in this package as the cross-environment uses
+;; a custom defpackage.
 (in-package :mezzano.internals)
 
 (defpackage :mezzano.compiler

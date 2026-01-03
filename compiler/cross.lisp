@@ -1,5 +1,21 @@
 ;;;; Packages used for cross-compilation.
 
+;; This is the first file loaded by ASDF.
+;;
+;; It sets up the CROSS-CL package, which is equivalent to the CL package,
+;; except that a bunch of symbols in it are shadowed. As parts of the cross
+;; compiler gets loaded we define our own versions of these symbols. This allows
+;; the compiler to be loaded in both the cross-environment (on a non-mezzano host
+;; lisp), and in the native environment with minimal changes.
+;;
+;; All other packages depend on this instead of CL, and if the host symbol needs
+;; to be referenced, it's explicitly called out using the CL: package prefix.
+;;
+;; Defpackage in the cross-environment (ie `cross-cl:defpackage`) is modified
+;; so that uses of the CL package are changed to uses of CROSS-CL.
+
+(in-package :cl-user)
+
 (defpackage :cross-cl
   (:use :cl)
   (:shadow :defconstant
