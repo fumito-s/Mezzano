@@ -18,11 +18,12 @@
   name
   class)
 
-(defun class-reference (name)
+(defun class-reference (name &optional (createp t))
   (check-type name symbol)
   (let ((entry (mezzano.supervisor:with-rw-lock-read (*class-reference-table-lock*)
                  (gethash name *class-reference-table*))))
-    (when (not entry)
+    (when (and (not entry)
+               createp)
       (mezzano.supervisor:with-rw-lock-write (*class-reference-table-lock*)
         (let ((new-entry (make-class-reference :name name)))
           (setf entry (or (sys.int::cas (gethash name *class-reference-table*)
@@ -39,7 +40,7 @@
            (symbolp (second symbol))
            (null (rest (rest symbol))))
       `(find-class-in-reference
-        (load-time-value (class-reference ',(second symbol)))
+        ',(class-reference (second symbol))
         ,errorp)
       whole))
 

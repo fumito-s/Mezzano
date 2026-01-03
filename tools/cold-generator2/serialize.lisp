@@ -667,7 +667,7 @@ Must not call SERIALIZE-OBJECT."))
   (let ((sdef (env:instance-structure-definition object)))
     (allocate (1+ (env:structure-definition-size sdef))
               image
-              (env:structure-definition-area sdef)
+              (or (env:structure-definition-area sdef) :general)
               sys.int::+tag-object+)))
 
 (defun initialize-instance-slot-by-location (instance-value slot-value location index image environment)
@@ -787,6 +787,13 @@ Must not call SERIALIZE-OBJECT."))
 (defmethod serialize-object ((object env:layout-proxy) image environment)
   (structure-definition-layout (env:layout-proxy-structure-definition object)
                                image environment))
+
+(defmethod serialize-object ((object env:class-reference) image environment)
+  (with-slots (env::%real-cref) object
+    (unless env::%real-cref
+      (setf env::%real-cref (env:make-structure environment 'mezzano.clos::class-reference
+                                                :name (env:class-reference-name object))))
+    (serialize-object env::%real-cref image environment)))
 
 (defun image-symbol-value (image environment symbol)
   (let ((cell (serialize-object

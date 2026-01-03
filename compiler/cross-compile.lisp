@@ -570,10 +570,6 @@
 
 (in-package :mezzano.internals)
 
-(defun sys.int::convert-structure-class-to-structure-definition (def)
-  (check-type def sys.int::structure-definition)
-  def)
-
 (defgeneric mezzano.clos:class-slots (class)
   (:method ((class sys.int::structure-definition))
     (sys.int::structure-definition-slots class)))
@@ -755,3 +751,15 @@ This should only fill in the START- slots and ignore the END- slots.")
 
 (defun mezzano.internals.numbers.logical::bytep (x)
   (cl:typep x 'cross-support::byte))
+
+(defclass cross-class-reference ()
+  ((%name :initarg :name :reader class-reference-name)))
+
+(defparameter *class-reference-table* (make-hash-table))
+
+(defun mezzano.clos::class-reference (name)
+  (let ((reference (gethash name *class-reference-table*)))
+    (unless reference
+      (setf reference (make-instance 'cross-class-reference :name name))
+      (setf (gethash name *class-reference-table*) reference))
+    reference))

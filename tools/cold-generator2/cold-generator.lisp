@@ -432,6 +432,10 @@
       (when (env:function-reference-documentation fref)
         (push (list (env:function-reference-name fref) (env:function-reference-documentation fref)) doclist)))
     (setf (env:cross-symbol-value environment 'sys.int::*initial-function-docstrings*) doclist))
+  (let ((cref-table (env:make-array environment 0 :adjustable t :fill-pointer 0)))
+    (env:do-all-environment-class-references (cref environment)
+      (vector-push-extend cref cref-table))
+    (setf (env:cross-symbol-value environment 'sys.int::*initial-cref-obarray*) cref-table))
   ;; Do this last, no symbols can be added after it.
   (let ((symbol-table (env:make-array environment 0 :adjustable t :fill-pointer 0)))
     ;; Prod symbol to make sure it gets included.

@@ -56,7 +56,8 @@
     (#.+llf-layout+ 'layout)
     (#.+llf-initialize-array+ 'initialize-array)
     (#.+llf-short-float+ 'short-float)
-    (#.+llf-complex-short-float+ 'complex-short-float)))
+    (#.+llf-complex-short-float+ 'complex-short-float)
+    (#.+llf-class-reference+ 'class-reference)))
 
 (defun llf-architecture-name (id)
   (case id
@@ -389,7 +390,9 @@
        (let ((array (vector-pop stack)))
          (dotimes (i len)
            (setf (row-major-aref array i) (aref elements i)))
-         array)))))
+         array)))
+    (#.+llf-class-reference+
+     (mezzano.clos::class-reference (vector-pop stack)))))
 
 (defun load-llf (stream &optional (*load-wired* nil))
   (check-llf-header stream)

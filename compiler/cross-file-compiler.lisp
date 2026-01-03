@@ -391,3 +391,7 @@
         (t
          (sys.int::save-object (symbol-name object) omap stream)
          (write-byte sys.int::+llf-uninterned-symbol+ stream))))
+
+(defmethod sys.int::save-one-object ((object sys.int::cross-class-reference) omap stream)
+  (sys.int::save-object (sys.int::class-reference-name object) omap stream)
+  (write-byte sys.int::+llf-class-reference+ stream))

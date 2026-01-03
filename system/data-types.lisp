@@ -360,6 +360,7 @@ reserved on the disk, but no specific block has been allocated.")
 (defconstant +llf-initialize-array+          #x2A)
 (defconstant +llf-short-float+               #x2B)
 (defconstant +llf-complex-short-float+       #x2C)
+(defconstant +llf-class-reference+           #x2D)
 
 ;;; Fields in the Unicode info tables.
 

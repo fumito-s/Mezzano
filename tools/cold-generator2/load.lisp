@@ -354,7 +354,9 @@
          (dotimes (i length)
            (setf (row-major-aref array i) (aref elements i)))
          array)))
-))
+    (#.sys.int::+llf-class-reference+
+     (let* ((name (stack-pop loader)))
+       (env:class-reference (loader-environment loader) name)))))
 
 (defun load-compiled-file (environment filespec &key wired)
   (format t ";; Loading ~S~%" filespec)

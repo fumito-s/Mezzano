@@ -18,6 +18,7 @@
            #:do-all-environment-symbols
            #:do-all-environment-frefs
            #:do-all-environment-structs
+           #:do-all-environment-class-references
            #:symbol-value-cell
            #:symbol-value-cell-value
            #:symbol-value-cell-symbol
@@ -95,6 +96,8 @@
            #:layout-proxy
            #:make-layout-proxy
            #:layout-proxy-structure-definition
+           #:class-reference
+           #:class-reference-name
 ))
 
 (in-package :mezzano.cold-generator.environment)
@@ -138,6 +141,8 @@
    (%specials :initform (make-hash-table) :reader environment-specials)
    ;; Class table.
    (%class-table :initform (make-hash-table) :reader environment-class-table)
+   ;; Class reference table.
+   (%class-reference-table :initform (make-hash-table) :reader environment-class-reference-table)
    ))
 
 (defun add-special (environment name value)
@@ -429,6 +434,15 @@
                 (environment-name-fref-table ,environment))
        ,result)))
 
+(defmacro do-all-environment-class-references ((cref environment &optional result) &body body)
+  (let ((key (gensym)))
+    `(progn
+       (maphash (lambda (,key ,cref)
+                  (declare (ignore ,key))
+                  ,@body)
+                (environment-class-reference-table ,environment))
+       ,result)))
+
 (defun translate-symbol (environment symbol)
   "Translate a host symbol to a cross symbol in ENVIRONMENT."
   (intern environment
@@ -679,3 +693,20 @@
 (defun make-layout-proxy (structure-definition)
   (make-instance 'layout-proxy
                  :structure-definition structure-definition))
+
+(defclass class-reference ()
+  ((%name :initarg :name :reader class-reference-name)
+   (%real-cref :initform nil :reader class-reference-real-cref)))
+
+(defmethod print-object ((object class-reference) stream)
+  (print-unreadable-object (object stream :type t :identity t)
+    (format stream "~S" (class-reference-name object))))
+
+(defun class-reference (environment name &optional (createp t))
+  (check-type name symbol)
+  (let ((reference (gethash name (environment-class-reference-table environment))))
+    (when (and (not reference)
+               createp)
+      (setf reference (make-instance 'class-reference :name name)
+            (gethash name (environment-class-reference-table environment)) reference))
+    reference))

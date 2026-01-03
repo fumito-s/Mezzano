@@ -10,7 +10,8 @@
                   *initial-obarray*
                   *initial-keyword-obarray*
                   *initial-fref-obarray*
-                  *initial-function-docstrings*)
+                  *initial-function-docstrings*
+                  *initial-cref-obarray*)
          (special *terminal-io*
                   *standard-output*
                   *standard-input*
@@ -275,6 +276,10 @@ structures to exist, and for memory to be allocated, but not much beyond that."
   ;; Put initial classes into the class table.
   (setf mezzano.clos::*class-reference-table* (make-hash-table :test #'eq :enforce-gc-invariant-keys t :weakness :key)
         mezzano.clos::*class-reference-table-lock* (mezzano.supervisor:make-rw-lock 'mezzano.clos::*class-reference-table*))
+  (loop for cref across *initial-cref-obarray*
+        do (setf (gethash (mezzano.clos::class-reference-name cref)
+                          mezzano.clos::*class-reference-table*)
+                 cref))
   (loop
      for (name . class) across mezzano.clos::*initial-class-table*
      do (setf (find-class name) class))
@@ -332,6 +337,7 @@ structures to exist, and for memory to be allocated, but not much beyond that."
   (makunbound '*additional-cold-toplevel-forms*)
   (makunbound '*cold-toplevel-forms*)
   (makunbound '*initial-fref-obarray*)
+  (makunbound '*initial-cref-obarray*)
   (write-line "First GC.")
   (room)
   (gc :full t)
