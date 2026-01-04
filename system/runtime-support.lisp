@@ -501,6 +501,7 @@
                 (sys.int::structure-definition-slots sdef)))))
 
 (defun %defstruct (structure-type &key location)
+  (declare (notinline (setf slot-value))) ; bootstrap hack
   (when (mezzano.runtime::structure-class-p structure-type)
     ;; Happens during cold load.
     (when location

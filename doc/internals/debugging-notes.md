@@ -1,11 +1,19 @@
 # Some random useful code snippets and notes on debugging tools
 
+## Magic button
+
+Press `M-F11` to dump all thread stacks and some other things to the cold-stream.
+This can be a little bit flaky because it's implemented at a low level.
+The left meta (alt) key must be used, the right key won't work, and sometimes the
+state machine can get out of sync. Tap the meta key a couple times to get it back.
+
 ## To get a disassembly in the cross-environment:
 
 Not actually a diassembly, it's the input to the assembler. Not a round-trip through the assembler & disassembler.
 
 ```lisp
-(let ((mezzano.compiler::*trace-asm* t))
+(let ((mezzano.compiler::*trace-asm* t)
+      (mezzano.compiler::*load-time-value-hook* 'mezzano.internals::compile-file-load-time-value))
   (mezzano.compiler::compile-lambda '<lambda-to-disassemble>))
 ```
 
@@ -109,7 +117,8 @@ Drop "profile.txt" in https://www.speedscope.app/ .
 (mapc #'rt:rem-test
       '(cl-test::make-array.23 ; Exhausts memory
         cl-test::make-array.28 ; Stack overflows
-        cl-test::print.cons.7 ; missing circularity detection
+        cl-test::print.cons.7 ; Missing circularity detection
+        cl-test::print.vector.circle.1 ; Stack overflows
         ;; These all take ages.
         cl-test::find-all-symbols.1
         cl-test::do-all-symbols.1
@@ -120,8 +129,14 @@ Drop "profile.txt" in https://www.speedscope.app/ .
         cl-test::bignum.float.compare.8
         cl-test::rational.double-float.random.compare.1
         cl-test::rational.long-float.random.compare.1
+        cl-test::print.vector.random.1
         ))
 ;; Since we're evaluating lots, better to avoid the compiler
 (setf mezzano.internals::*eval-hook* 'mezzano.full-eval:eval-in-lexenv)
 (time (regression-test:do-tests))
+```
+
+To skip a test:
+```list
+(throw 'rt::*in-test* nil)
 ```

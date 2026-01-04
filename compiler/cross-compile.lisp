@@ -423,6 +423,8 @@
   (declare (ignore env))
   (if (or (eql form 'nil) (eql form 't)
           (keywordp form)
+          (and (consp form)
+               (eql (first form) 'quote))
           (and (not (symbolp form))
                (not (consp form))))
       t
