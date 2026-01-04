@@ -984,7 +984,7 @@
 
 (defun non-pretty-print (object s)
   (let ((*print-level* (if *print-level*
-                           (- *print-level* *current-level*)))
+                           (max 0 (- *print-level* *current-level*))))
         ;; The original behaviour was to rebind *print-pretty* to nil,
         ;; but that seemed to be so that the non-pretty-printer would be
         ;; invoked. Now it is invoked directly and we we don't actually
