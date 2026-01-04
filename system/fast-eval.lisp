@@ -10,8 +10,16 @@
   (let ((mezzano.compiler::*load-time-value-hook* 'mezzano.compiler::eval-load-time-value)
         (*compile-file-pathname* (or *compile-file-pathname*
                                      *load-pathname*)))
-    (funcall (mezzano.compiler::compile-lambda `(lambda () (progn ,form))
-                                               env))))
+    (funcall
+     (handler-case
+         (mezzano.compiler::compile-lambda
+          `(lambda () (progn ,form))
+          env)
+       (error ()
+         ;; If we fail to compile, then fall back on the interpreter
+         (mezzano.full-eval:eval-in-lexenv
+          `(lambda () (progn ,form))
+          env))))))
 
 (defun eval-progn-body (forms env)
   (do ((itr forms (cdr itr)))
