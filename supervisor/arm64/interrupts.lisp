@@ -20,7 +20,7 @@
   (mezzano.lap.arm64:ldr :x0 (:constant "Not on wired stack."))
   (mezzano.lap.arm64:movz :x5 #.(ash 1 sys.int::+n-fixnum-bits+))
   (mezzano.lap.arm64:named-call panic)
-  (mezzano.lap.arm64:hlt 0))
+  (mezzano.lap.arm64:brk 42))
 
 (sys.int::define-lap-function sys.int::%interrupt-state (())
   (:gc :no-frame :layout #*)
@@ -206,6 +206,9 @@
          (case comment
            (28 ; %%partial-save-return-thunk
             (partial-save-return-helper interrupt-frame))
+           (42 ; %%unreachable
+            (pager-invoke-via-interrupt
+             #'mezzano.runtime::%raise-unreachable interrupt-frame nil))
            (t
             (unhandled-interrupt interrupt-frame "brk")))))
       (#x33 ; Software Step exception taken without a change in Exception level

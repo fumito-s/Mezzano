@@ -99,3 +99,15 @@ Returns a profile object which can be passed to `mezzano.profiler:save-profile`.
 `(mezzano.profiler:save-profile "profile.txt" <profile> :verbosity :flame-graph)`
 
 Drop "profile.txt" in https://www.speedscope.app/ .
+
+## Ansi-Tests
+
+To load:
+```lisp
+(load "ansi-test/init.lsp" :verbose t :print t)
+```
+
+To run:
+```lisp
+(time (regression-test:do-tests))
+```

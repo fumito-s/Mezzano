@@ -92,13 +92,13 @@
   (mezzano.lap.arm64:ldr :x1 (:constant simple-vector))
   (mezzano.lap.arm64:movz :x5 #.(ash 2 sys.int::+n-fixnum-bits+)) ; fixnum 2
   (mezzano.lap.arm64:named-call sys.int::raise-type-error)
-  (mezzano.lap.arm64:hlt 0)
+  (mezzano.lap.arm64:brk 42)
   TOO-MANY-VALUES
   (mezzano.lap.arm64:ldr :x0 (:constant "Too many values in simple-vector ~S."))
   (mezzano.lap.arm64:orr :x1 :xzr :x6)
   (mezzano.lap.arm64:movz :x5 #.(ash 2 sys.int::+n-fixnum-bits+)) ; fixnum 2
   (mezzano.lap.arm64:named-call error)
-  (mezzano.lap.arm64:hlt 0)
+  (mezzano.lap.arm64:brk 42)
   BAD-ARGUMENTS
   (:gc :no-frame :incoming-arguments :rcx)
   (mezzano.lap.arm64:adr :x6 (+ (- ENTRY-POINT 16) #.sys.int::+tag-object+))
@@ -235,7 +235,7 @@
   (mezzano.lap.arm64:ldr :x1 (:constant sys.int::proper-list))
   (mezzano.lap.arm64:movz :x5 #.(ash 2 sys.int::+n-fixnum-bits+)) ; fixnum 2
   (mezzano.lap.arm64:named-call sys.int::raise-type-error)
-  (mezzano.lap.arm64:hlt 0))
+  (mezzano.lap.arm64:brk 42))
 
 (sys.int::define-lap-function eql ((x y))
   "Compare X and Y."

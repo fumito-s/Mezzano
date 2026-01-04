@@ -664,7 +664,7 @@
         `(lap:ret)))
 
 (defmethod emit-lap (backend-function (instruction ir:unreachable-instruction) uses defs)
-  (emit `(lap:hlt 42)))
+  (emit `(lap:brk 42)))
 
 (defmethod emit-lap (backend-function (instruction ir:jump-instruction) uses defs)
   (when (not (eql (ir:next-instruction backend-function instruction)

@@ -389,6 +389,10 @@ thread's stack if this function is called from normal code."
 (defun %%unreachable ()
   (%%unreachable))
 
+;; Generally due to a non-return function returning.
+(defun mezzano.runtime::%raise-unreachable ()
+  (error "Unreachable code reached!"))
+
 (defun encode-weak-pointer-weakness (weakness)
   (ecase weakness
     (:key +weak-pointer-weakness-key+)
