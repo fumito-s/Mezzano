@@ -296,10 +296,10 @@
   read-y
   (mezzano.lap.arm64:ands :xzr :x1 #.+fixnum-tag-mask+)
   (mezzano.lap.arm64:b.ne read-bignum-y)
-  (mezzano.lap.arm64:add :x13 :xzr :x1 :asr 1)
+  (mezzano.lap.arm64:add :x7 :xzr :x1 :asr 1)
   perform-multiply
-  (mezzano.lap.arm64:umulh :x11 :x12 :x13)
-  (mezzano.lap.arm64:madd :x10 :xzr :x12 :x13)
+  (mezzano.lap.arm64:umulh :x11 :x12 :x7)
+  (mezzano.lap.arm64:madd :x10 :xzr :x12 :x7)
   ;; X11:X10 holds the 128-bit result.
   ;; Prepare to allocate the result.
   (mezzano.lap.arm64:stp :x10 :x11 (:pre :sp -16))
@@ -320,5 +320,5 @@
   (mezzano.lap.arm64:ldr :x12 (:object :x0 0))
   (mezzano.lap.arm64:b read-y)
   read-bignum-y
-  (mezzano.lap.arm64:ldr :x13 (:object :x1 0))
+  (mezzano.lap.arm64:ldr :x7 (:object :x1 0))
   (mezzano.lap.arm64:b perform-multiply))
