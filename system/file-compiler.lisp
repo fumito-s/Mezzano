@@ -158,7 +158,10 @@ NOTE: Non-compound forms (after macro-expansion) are ignored."
 (defvar *llf-forms*)
 (defvar *llf-dry-run*)
 
-(defparameter *llf-architecture* nil)
+(defparameter *llf-architecture*
+  (progn
+    #+x86-64 :x86-64
+    #+arm64 :arm64))
 
 (defun write-llf-header (output-stream input-file)
   (declare (ignore input-file))
