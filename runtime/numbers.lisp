@@ -848,6 +848,7 @@
          (sys.int::%bignum-integer-length integer))
         (t (error 'type-error :expected-type 'integer :datum integer))))
 
+(declaim (inline left-shift))
 (defun left-shift (integer count)
   (cond ((and (sys.int::fixnump integer)
               (sys.int::fixnump count))
@@ -855,6 +856,7 @@
         (t
          (generic-left-shift integer count))))
 
+(declaim (inline right-shift))
 (defun right-shift (integer count)
   (cond ((and (sys.int::fixnump integer)
               (sys.int::fixnump count))
@@ -904,48 +906,56 @@
      (assert (eql count 0))
      integer)))
 
+(declaim (inline sys.int::binary-=))
 (defun sys.int::binary-= (lhs rhs)
   (if (and (sys.int::fixnump lhs)
            (sys.int::fixnump rhs))
       (eq lhs rhs)
       (sys.int::generic-= lhs rhs)))
 
+(declaim (inline sys.int::binary-<))
 (defun sys.int::binary-< (lhs rhs)
   (if (and (sys.int::fixnump lhs)
            (sys.int::fixnump rhs))
       (%fixnum-< lhs rhs)
       (sys.int::generic-< lhs rhs)))
 
+(declaim (inline sys.int::binary-<=))
 (defun sys.int::binary-<= (lhs rhs)
   (if (and (sys.int::fixnump lhs)
            (sys.int::fixnump rhs))
       (not (%fixnum-< rhs lhs))
       (sys.int::generic-<= lhs rhs)))
 
+(declaim (inline sys.int::binary->))
 (defun sys.int::binary-> (lhs rhs)
   (if (and (sys.int::fixnump lhs)
            (sys.int::fixnump rhs))
       (%fixnum-< rhs lhs)
       (sys.int::generic-> lhs rhs)))
 
+(declaim (inline sys.int::binary->=))
 (defun sys.int::binary->= (lhs rhs)
   (if (and (sys.int::fixnump lhs)
            (sys.int::fixnump rhs))
       (not (%fixnum-< lhs rhs))
       (sys.int::generic->= lhs rhs)))
 
+(declaim (inline sys.int::binary-+))
 (defun sys.int::binary-+ (lhs rhs)
   (if (and (sys.int::fixnump lhs)
            (sys.int::fixnump rhs))
       (%fixnum-+ lhs rhs)
       (sys.int::generic-+ lhs rhs)))
 
+(declaim (inline sys.int::binary--))
 (defun sys.int::binary-- (lhs rhs)
   (if (and (sys.int::fixnump lhs)
            (sys.int::fixnump rhs))
       (%fixnum-- lhs rhs)
       (sys.int::generic-- lhs rhs)))
 
+(declaim (inline sys.int::binary-*))
 (defun sys.int::binary-* (lhs rhs)
   (if (and (sys.int::fixnump lhs)
            (sys.int::fixnump rhs))
