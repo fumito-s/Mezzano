@@ -980,24 +980,28 @@
     (declare (ignore quot))
     rem))
 
+(declaim (inline sys.int::binary-logand))
 (defun sys.int::binary-logand (lhs rhs)
   (if (and (sys.int::fixnump lhs)
            (sys.int::fixnump rhs))
       (%fixnum-logand lhs rhs)
       (sys.int::generic-logand lhs rhs)))
 
+(declaim (inline sys.int::binary-logior))
 (defun sys.int::binary-logior (lhs rhs)
   (if (and (sys.int::fixnump lhs)
            (sys.int::fixnump rhs))
       (%fixnum-logior lhs rhs)
       (sys.int::generic-logior lhs rhs)))
 
+(declaim (inline sys.int::binary-logxor))
 (defun sys.int::binary-logxor (lhs rhs)
   (if (and (sys.int::fixnump lhs)
            (sys.int::fixnump rhs))
       (%fixnum-logxor lhs rhs)
       (sys.int::generic-logxor lhs rhs)))
 
+(declaim (inline lognot))
 (defun lognot (integer)
   (if (sys.int::fixnump integer)
       (%fixnum-logxor integer -1)
