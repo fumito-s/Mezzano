@@ -127,7 +127,9 @@
     mezzano.runtime::%allocate-object))
 
 (defclass profile-data ()
-  ((%data :initarg :data :reader profile-data)))
+  ((%data :initarg :data :reader profile-data)
+   (%form :initarg :form :reader profile-form))
+  (:default-initargs :form nil))
 
 (defstruct thread-sample
   thread
@@ -146,9 +148,9 @@
 :PRUNE - When :THREAD is T, try to prune away stack frames above the WITH-PROFILING call.
 :IGNORE-FUNCTIONS - A list of function names to be removed from the call stack."
   (declare (ignore buffer-size path thread verbosity prune ignore-functions repeat order-by))
-  `(call-with-profiling (lambda () ,@body) ,@options))
+  `(call-with-profiling (lambda () ,@body) ,@options :form ',body))
 
-(defun call-with-profiling (function &key buffer-size path (thread t) (verbosity :report) (prune (eql thread 't)) (ignore-functions *ignorable-function-names*) repeat order-by)
+(defun call-with-profiling (function &key buffer-size path (thread t) (verbosity :report) (prune (eql thread 't)) (ignore-functions *ignorable-function-names*) repeat order-by form)
   (let* ((profile-buffer nil)
          (results (cond (repeat
                          (let ((profiles '()))
@@ -189,7 +191,7 @@
                             (setf profile-buffer (decode-profile-buffer (mezzano.supervisor:stop-profiling)
                                                                         (if prune #'call-with-profiling nil)
                                                                         ignore-functions))))))))
-    (let ((data (make-instance 'profile-data :data profile-buffer)))
+    (let ((data (make-instance 'profile-data :data profile-buffer :form form)))
       (cond (path
              (save-profile path data :verbosity verbosity :order-by order-by)
              (values-list results))
@@ -294,34 +296,45 @@ thread states & call-stacks."
                (vector-push-extend new buffer)))))))
 
 (defun name-for-flame-graph (fn)
-  (let ((*print-pretty* nil))
-    (substitute #\_ #\Space
-                (substitute #\L #\<
-                            (substitute #\G #\>
-                                        (format nil "~(~S~)" (mezzano.internals::function-name fn)))))))
+  (let* ((*print-pretty* nil)
+         (name (format nil "~(~S~)" (mezzano.internals::function-name fn))))
+    (loop for i below (length name)
+          for ch = (char name i)
+          do (cond
+               ((eql ch #\Space) (setf (char name i) #\_))
+               ((eql ch #\<) (setf (char name i) #\L))
+               ((eql ch #\>) (setf (char name i) #\G))))
+    name))
 
 (defun generate-allocation-flame-graph (profile stream threshold)
-  (labels ((frob (level stack)
-             (loop
-                for i from 0 below (length level) by 3
-                for fn = (aref level i)
-                for count = (aref level (+ i 1))
-                for next = (aref level (+ i 2))
-                for name = (name-for-flame-graph fn)
-                for stack2 = (list* name stack)
-                for first = t
-                do
-                  (when (>= count threshold)
-                    (dolist (entry (nreverse stack2))
-                      (cond (first (setf first nil))
-                            (t (write-char #\; stream)))
-                      (write-string entry stream))
-                    (write-char #\Space stream)
-                    (write count :stream stream)
-                    (terpri stream))
-                  (frob next stack2))))
-    (frob profile '()))
-  profile)
+  (let ((names (make-hash-table)))
+    (labels ((name-fn (fn)
+               (let ((name (gethash fn names)))
+                 (unless name
+                   (setf name (name-for-flame-graph fn)
+                         (gethash fn names) name))
+                 name))
+             (frob (level stack)
+               (loop
+                 for i from 0 below (length level) by 3
+                 for fn = (aref level i)
+                 for count = (aref level (+ i 1))
+                 for next = (aref level (+ i 2))
+                 for name = (name-for-flame-graph fn)
+                 for stack2 = (list* name stack)
+                 for first = t
+                 do
+                    (when (>= count threshold)
+                      (dolist (entry (nreverse stack2))
+                        (cond (first (setf first nil))
+                              (t (write-char #\; stream)))
+                        (write-string entry stream))
+                      (write-char #\Space stream)
+                      (write count :stream stream)
+                      (terpri stream))
+                    (frob next stack2))))
+      (frob profile '()))
+    profile))
 
 (defun call-with-allocation-profiling (function &key repeat)
   (let ((raw-buffer (make-array 3 :adjustable t :fill-pointer 0)))
