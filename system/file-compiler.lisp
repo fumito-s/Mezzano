@@ -300,6 +300,15 @@ NOTE: Non-compound forms (after macro-expansion) are ignored."
            (save-object (aref object i) omap stream))
          (write-byte +llf-initialize-array+ stream)
          (save-integer (length object) stream))
+        ((every #'integerp object)
+         ;; Same as below, but everything is an integer so we can use
+         ;; the faster integer-only save operations.
+         (save-object (array-element-type object) omap stream)
+         (write-byte +llf-typed-integer-array+ stream)
+         (save-integer 1 stream)
+         (save-integer (length object) stream)
+         (dotimes (i (length object))
+           (save-integer (aref object i) stream)))
         (t
          ;; Save the vector with the appropriate element-type,
          ;; trimming it down based on the fill-pointer (if any).

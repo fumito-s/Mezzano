@@ -356,7 +356,20 @@
          array)))
     (#.sys.int::+llf-class-reference+
      (let* ((name (stack-pop loader)))
-       (env:class-reference (loader-environment loader) name)))))
+       (env:class-reference (loader-environment loader) name)))
+    (#.sys.int::+llf-typed-integer-array+
+     (let* ((n-dimensions (load-integer loader))
+            (dimensions (loop for i from 0 below n-dimensions
+                           collect (load-integer loader)))
+            (element-type (stack-pop loader))
+            (array (env:make-array (loader-environment loader)
+                                   dimensions
+                                   :element-type element-type
+                                   :area (loader-allocation-area loader)))
+            (total-size (array-total-size array)))
+       (dotimes (i total-size)
+         (setf (row-major-aref array i) (load-integer loader)))
+       array))))
 
 (defun load-compiled-file (environment filespec &key wired)
   (format t ";; Loading ~S~%" filespec)

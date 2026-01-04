@@ -57,7 +57,8 @@
     (#.+llf-initialize-array+ 'initialize-array)
     (#.+llf-short-float+ 'short-float)
     (#.+llf-complex-short-float+ 'complex-short-float)
-    (#.+llf-class-reference+ 'class-reference)))
+    (#.+llf-class-reference+ 'class-reference)
+    (#.+llf-typed-integer-array+ 'typed-integer-array)))
 
 (defun llf-architecture-name (id)
   (case id
@@ -236,6 +237,19 @@
     (decf (fill-pointer stack) n-elements)
     array))
 
+(defun load-llf-typed-integer-array (stream stack)
+  (let* ((n-dimensions (load-integer stream))
+         (dimensions (loop for i from 0 below n-dimensions
+                        collect (load-integer stream)))
+         (element-type (vector-pop stack))
+         (array (make-array dimensions
+                            :area (if *load-wired* :wired nil)
+                            :element-type element-type))
+         (n-elements (array-total-size array)))
+    (dotimes (i n-elements)
+      (setf (row-major-aref array i) (load-integer stream)))
+    array))
+
 (defun load-inhibited ()
   (and *load-if-stack*
        (or (not (first *load-if-stack*))
@@ -392,7 +406,9 @@
            (setf (row-major-aref array i) (aref elements i)))
          array)))
     (#.+llf-class-reference+
-     (mezzano.clos::class-reference (vector-pop stack)))))
+     (mezzano.clos::class-reference (vector-pop stack)))
+    (#.+llf-typed-integer-array+
+     (load-llf-typed-integer-array stream stack))))
 
 (defun load-llf (stream &optional (*load-wired* nil))
   (check-llf-header stream)
