@@ -228,7 +228,8 @@
            (location-stream (make-instance 'sys.int::location-tracking-stream
                                            :stream input-stream
                                            :namestring (ignore-errors (namestring *compile-file-pathname*))))
-           (*output-fasl* t))
+           (*output-fasl* t)
+           (sys.int::*llf-architecture* *target-architecture*))
       (sys.int::with-reader-location-tracking
         (loop
           for form = (read location-stream nil eof-marker)
@@ -306,7 +307,8 @@
          ;; Don't persist optimize proclaimations outside COMPILE-FILE.
          (mezzano.compiler::*optimize-policy* (copy-list mezzano.compiler::*optimize-policy*))
          (sys.int::*fixup-table* (make-hash-table))
-         (*output-fasl* t))
+         (*output-fasl* t)
+         (sys.int::*llf-architecture* *target-architecture*))
     (loop
       for values = (multiple-value-list (funcall generator))
       for form = (first values)
@@ -391,7 +393,3 @@
         (t
          (sys.int::save-object (symbol-name object) omap stream)
          (write-byte sys.int::+llf-uninterned-symbol+ stream))))
-
-(defmethod sys.int::save-one-object ((object sys.int::cross-class-reference) omap stream)
-  (sys.int::save-object (sys.int::class-reference-name object) omap stream)
-  (write-byte sys.int::+llf-class-reference+ stream))

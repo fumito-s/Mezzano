@@ -456,13 +456,16 @@
 
 ;; FIXME: Should be a weak hash table. How to deal with setf/cas names?
 (defvar *fref-table* (make-hash-table :test #'equal))
+(defparameter *function-reference-hook-hack* nil)
 
 (defun resolve-fref (name)
   (alexandria:ensure-gethash name *fref-table*
                              (make-cross-fref name)))
 
 (defun sys.int::function-reference (name)
-  (resolve-fref name))
+  (if *function-reference-hook-hack*
+      (funcall *function-reference-hook-hack* name)
+      (resolve-fref name)))
 
 (defun valid-function-name-p (name)
   (typep name '(or symbol
@@ -752,14 +755,14 @@ This should only fill in the START- slots and ignore the END- slots.")
 (defun mezzano.internals.numbers.logical::bytep (x)
   (cl:typep x 'cross-support::byte))
 
-(defclass cross-class-reference ()
-  ((%name :initarg :name :reader class-reference-name)))
+(defclass mezzano.clos::class-reference ()
+  ((%name :initarg :name :reader mezzano.clos::class-reference-name)))
 
 (defparameter *class-reference-table* (make-hash-table))
 
 (defun mezzano.clos::class-reference (name)
   (let ((reference (gethash name *class-reference-table*)))
     (unless reference
-      (setf reference (make-instance 'cross-class-reference :name name))
+      (setf reference (make-instance 'mezzano.clos::class-reference :name name))
       (setf (gethash name *class-reference-table*) reference))
     reference))

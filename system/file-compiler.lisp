@@ -158,13 +158,16 @@ NOTE: Non-compound forms (after macro-expansion) are ignored."
 (defvar *llf-forms*)
 (defvar *llf-dry-run*)
 
+(defparameter *llf-architecture* nil)
+
 (defun write-llf-header (output-stream input-file)
   (declare (ignore input-file))
   ;; TODO: write the source file name out as well.
   (write-sequence #(#x4C #x4C #x46 #x01) output-stream) ; LLF\x01
   (save-integer *llf-version* output-stream)
-  (save-integer #+x86-64 +llf-arch-x86-64+
-                #+arm64 +llf-arch-arm64+
+  (save-integer (ecase *llf-architecture*
+                  (:x86-64 +llf-arch-x86-64+)
+                  (:arm64 +llf-arch-arm64+))
                 output-stream))
 
 (defun save-integer (integer stream)
