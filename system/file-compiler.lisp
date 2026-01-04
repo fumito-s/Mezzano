@@ -669,8 +669,7 @@ NOTE: Non-compound forms (after macro-expansion) are ignored."
                                      docstring
                                      nil)
                                nil
-                               #+x86-64 :x86-64
-                               #+arm64 :arm64))
+                               *llf-architecture*))
           env))))
     (t
      (compile-top-level-form-for-value form env)
@@ -800,7 +799,7 @@ NOTE: Non-compound forms (after macro-expansion) are ignored."
                                :tlf-number *top-level-form-number*)))
         (push fn *deferred-functions*)
         fn)
-      (mezzano.compiler::compile-lambda lambda env)))
+      (mezzano.compiler::compile-lambda lambda env *llf-architecture*)))
 
 (defun compile-file-worker (work-fifo return-fifo)
   (unwind-protect
@@ -898,6 +897,7 @@ NOTE: Non-compound forms (after macro-expansion) are ignored."
                                                     (*compile-print* ,*compile-print*)
                                                     (*compile-file-pathname* ,*compile-file-pathname*)
                                                     (*compile-file-truename* ,*compile-file-truename*)
+                                                    (*llf-architecture* ,*llf-architecture*)
                                                     ,@(mezzano.compiler::compiler-state-bindings))
                                 :priority :low)
                                workers))

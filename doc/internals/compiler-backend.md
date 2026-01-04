@@ -2,6 +2,9 @@
 
 ## Design
 
+This sits behind the original compiler, taking in the processed & optimized AST, producing
+a list of IR instructions, then finally generating assembly from that.
+
 Instructions all linked together with an intrusive doubly-linked list. Basic blocks are
 implicit.
 
