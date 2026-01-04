@@ -951,3 +951,6 @@ executed, and the offset into it."
 
 (defmethod function-lambda-list ((function mezzano.clos:generic-function))
   (mezzano.clos:generic-function-lambda-list function))
+
+(defmacro step (form)
+  `(let () nil ,form))

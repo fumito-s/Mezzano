@@ -102,12 +102,26 @@ Drop "profile.txt" in https://www.speedscope.app/ .
 
 ## Ansi-Tests
 
-To load:
 ```lisp
-(load "ansi-test/init.lsp" :verbose t :print t)
-```
-
-To run:
-```lisp
+(in-package :cl-user)
+(load (merge-pathnames "ansi-test/init.lsp" (user-homedir-pathname)) :verbose t :print t)
+(rt:disable-note :nil-vectors-are-strings)
+(mapc #'rt:rem-test
+      '(cl-test::make-array.23 ; Exhausts memory
+        cl-test::make-array.28 ; Stack overflows
+        cl-test::print.cons.7 ; missing circularity detection
+        ;; These all take ages.
+        cl-test::find-all-symbols.1
+        cl-test::do-all-symbols.1
+        cl-test::do-all-symbols.2
+        cl-test::do-all-symbols.3
+        cl-test::do-all-symbols.4
+        cl-test::bignum.float.compare.7
+        cl-test::bignum.float.compare.8
+        cl-test::rational.double-float.random.compare.1
+        cl-test::rational.long-float.random.compare.1
+        ))
+;; Since we're evaluating lots, better to avoid the compiler
+(setf mezzano.internals::*eval-hook* 'mezzano.full-eval:eval-in-lexenv)
 (time (regression-test:do-tests))
 ```
