@@ -3165,10 +3165,16 @@ always match."
    (lambda (valid-initargs invalid-initargs)
      (error 'sys.int::simple-program-error
             :format-control "Invalid initargs ~:S when creating instance of ~S (~S).~%Supplied: ~:S~%valid: ~:S"
-            :format-arguments (list invalid-initargs class (class-name class) initargs valid-initargs)))))
+            :format-arguments (list invalid-initargs
+                                    class
+                                    (class-name class)
+                                    ;; Must copy here because the list may be dynamic-extent
+                                    (copy-list initargs)
+                                    valid-initargs)))))
 
 (defgeneric make-instance (class &rest initargs &key &allow-other-keys))
 (defmethod make-instance ((class std-class) &rest initargs)
+  (declare (dynamic-extent initargs))
   (let ((ctor (safe-class-constructor class)))
     (when ctor
       (return-from make-instance
@@ -3180,6 +3186,7 @@ always match."
       instance)))
 
 (defmethod make-instance ((class symbol) &rest initargs)
+  (declare (dynamic-extent initargs))
   (apply #'make-instance (find-class class) initargs))
 
 (define-compiler-macro make-instance (&whole whole class &rest initargs &key &allow-other-keys)
