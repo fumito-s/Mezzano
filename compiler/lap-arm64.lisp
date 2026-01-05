@@ -981,7 +981,7 @@
     (check-register-class dst :gpr-64 :gpr-32 :sp :wsp :xzr :wzr)
     (if is-64-bit
         (check-register-class lhs :gpr-64 :xzr)
-        (check-register-class :gpr-32 :wzr))
+        (check-register-class lhs :gpr-32 :wzr))
     (cond ((and (not negate-bit)
                 (null (register-class rhs))
                 (null shift)

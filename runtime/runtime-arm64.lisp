@@ -675,3 +675,63 @@
   (mezzano.lap.arm64:orr :x2 :xzr :x3) ; third return value, cmp-2
   (mezzano.lap.arm64:movz :x5 #.(ash 3 sys.int::+n-fixnum-bits+)) ; three return values
   (mezzano.lap.arm64:ret))
+
+;; Slightly funny calling convention here.
+;; First argument is either the symbol for global-cell, or 0 if the symbol is known
+;; to not be global.
+(sys.int::define-lap-function %fast-symbol-value-cell ((original-symbol global-cell))
+  (:gc :no-frame :layout #*)
+  ;; If the original symbol wasn't supplied, then it is known to not be a
+  ;; global symbol.
+  (mezzano.lap.arm64:cbz :x0 not-global)
+  ;; Otherwise it may or may not be global.
+  ;; For global symbols, don't even look at the cache.
+  ;; Cache entries exist on the stack, which may not be paged in.
+  (mezzano.lap.arm64:ldrb :w9 (:x0 #.(+ (- sys.int::+tag-object+) 1)))
+  (mezzano.lap.arm64:and :x9 :x9 #b111)
+  (mezzano.lap.arm64:cmp :x9 #.sys.int::+symbol-mode-global+)
+  (mezzano.lap.arm64:b.eq is-global)
+  not-global
+  ;; Compute symbol hash. Symbols are wired, so use the address.
+  ;; Ignore the low 4 bits.
+  (mezzano.lap.arm64:lsr :x9 :x1 1)
+  (mezzano.lap.arm64:and :x9 :x9 #.(ash (1- mezzano.supervisor::+thread-symbol-cache-size+) 3))
+  ;; Load cache entry.
+  (mezzano.lap.arm64:add :x9 :x9 #.(+ (- sys.int::+tag-object+) 8 (* mezzano.supervisor::+thread-symbol-cache+ 8)))
+  (mezzano.lap.arm64:ldr :x0 (:x28 :x9))
+  ;; Do symbols match?
+  (mezzano.lap.arm64:ldr :x2 (:object :x0 #.sys.int::+symbol-value-cell-symbol+))
+  (mezzano.lap.arm64:cmp :x1 :x2)
+  (mezzano.lap.arm64:b.ne cache-miss)
+  ;; Cache hit. Log.
+  (mezzano.lap.arm64:ldr :x9 (:object :x28 #.mezzano.supervisor::+thread-symbol-cache-hit-count+))
+  (mezzano.lap.arm64:add :x9 :x9 #.(ash 1 sys.int::+n-fixnum-bits+))
+  (mezzano.lap.arm64:str :x9 (:object :x28 #.mezzano.supervisor::+thread-symbol-cache-hit-count+))
+  ;; Done
+  (mezzano.lap.arm64:ret)
+  ;; Global cell, just return the cell.
+  is-global
+  (mezzano.lap.arm64:mov :x0 :x1)
+  (mezzano.lap.arm64:ret)
+  ;; Path of shame.
+  cache-miss
+  (:gc :no-frame :layout #*)
+  (mezzano.lap.arm64:stp :x1 :x30 (:pre :sp -16))
+  (:gc :no-frame :layout #*11) ; should be either #*10 or #*01 but i can't remember which
+  ;; Call the slow function.
+  (mezzano.lap.arm64:mov :x0 :x1)
+  (mezzano.lap.arm64:mov :x5 #.(ash 1 sys.int::+n-fixnum-bits+))
+  (mezzano.lap.arm64:named-call mezzano.runtime::%symbol-value-cell-by-cell)
+  ;; Log a cache miss.
+  (mezzano.lap.arm64:ldr :x9 (:object :x28 #.mezzano.supervisor::+thread-symbol-cache-miss-count+))
+  (mezzano.lap.arm64:add :x9 :x9 #.(ash 1 sys.int::+n-fixnum-bits+))
+  (mezzano.lap.arm64:str :x9 (:object :x28 #.mezzano.supervisor::+thread-symbol-cache-miss-count+))
+  ;; Recompute the hash.
+  (mezzano.lap.arm64:ldp :x1 :x30 (:post :sp 16))
+  (:gc :no-frame :layout #*)
+  (mezzano.lap.arm64:lsr :x9 :x1 1)
+  (mezzano.lap.arm64:and :x9 :x9 #.(ash (1- mezzano.supervisor::+thread-symbol-cache-size+) 3))
+  ;; Write the entry into the cache.
+  (mezzano.lap.arm64:add :x9 :x9 #.(+ (- sys.int::+tag-object+) 8 (* mezzano.supervisor::+thread-symbol-cache+ 8)))
+  (mezzano.lap.arm64:str :x0 (:x28 :x9))
+  (mezzano.lap.arm64:ret))

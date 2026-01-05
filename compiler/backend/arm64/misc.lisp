@@ -49,15 +49,36 @@
                        :destination result
                        :value (mezzano.runtime::symbol-global-value-cell symbol))))
 
-(define-builtin mezzano.runtime::fast-symbol-value-cell (((:constant symbol symbol)) result :has-wrapper nil)
-  (cond ((eql (sys.int::symbol-mode symbol) :global)
+(define-builtin mezzano.runtime::fast-symbol-value-cell ((symbol) result :has-wrapper nil)
+  (cond ((and (constant-value-p symbol 'symbol)
+              (eql (sys.int::symbol-mode (fetch-constant-value symbol)) :global))
          ;; This is a known global symbol, return the global value cell.
          (emit (make-instance 'ir:constant-instruction
                               :destination result
-                              :value (mezzano.runtime::symbol-global-value-cell symbol))))
+                              :value (mezzano.runtime::symbol-global-value-cell
+                                      (fetch-constant-value symbol)))))
         (t
-         ;; Punt.
-         (give-up))))
+         (let ((global-cell (make-instance 'ir:virtual-register))
+               (second-arg (make-instance 'ir:virtual-register)))
+           ;; Fetch the symbol's global cell - the cache is keyed on this.
+           (cond ((constant-value-p symbol 'symbol)
+                  (emit (make-instance 'ir:constant-instruction
+                                       :value (mezzano.runtime::symbol-global-value-cell
+                                               (fetch-constant-value symbol))
+                                       :destination global-cell))
+                  (emit (make-instance 'ir:constant-instruction
+                                       :value 0
+                                       :destination second-arg)))
+                 (t
+                  (emit (make-instance 'ir:call-instruction
+                                       :function 'mezzano.runtime::symbol-global-value-cell
+                                       :result global-cell
+                                       :arguments (list symbol)))
+                  (setf second-arg symbol)))
+           (emit (make-instance 'ir:call-instruction
+                                :function 'mezzano.runtime::%fast-symbol-value-cell
+                                :result result
+                                :arguments (list second-arg global-cell)))))))
 
 (define-builtin sys.int::%instance-layout ((object) result)
   (let ((temp1 (make-instance 'ir:virtual-register)))
