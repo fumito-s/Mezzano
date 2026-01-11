@@ -5,6 +5,12 @@
 (defglobal *hash-table-unbound-value*)
 (defglobal *hash-table-tombstone*)
 
+(defun align-up-to-power-of-two (integer)
+  "Align INTEGER up to the next power of two."
+  (if (zerop integer)
+      0
+      (ash 1 (integer-length (1- integer)))))
+
 (defstruct (hash-table
              (:constructor %make-hash-table))
   (test 'eql :type (member eq eql equal equalp) :read-only t)
@@ -107,7 +113,7 @@
 
 ;;; Unsynchronized hash-tables are safe for use with concurrent readers
 ;;; as long as they only contains gc-invariant keys.
-(defun make-hash-table (&key (test 'eql) (size 101) (rehash-size 2.5) (rehash-threshold 0.5) synchronized enforce-gc-invariant-keys weakness)
+(defun make-hash-table (&key (test 'eql) (size 128) (rehash-size 2.5) (rehash-threshold 0.5) synchronized enforce-gc-invariant-keys weakness)
   ;; Canonicalize and check the test function
   (cond ((eql test #'eq) (setf test 'eq))
         ((eql test #'eql) (setf test 'eql))
@@ -118,6 +124,7 @@
   (check-type rehash-size (or (integer 1 *) (float (1.0) *)))
   (check-type rehash-threshold (real 0 1))
   (check-type weakness (member nil :key :value :key-or-value :key-and-value))
+  (setf size (align-up-to-power-of-two size))
   (let ((ht (%make-hash-table :test test
                               :hash-function (hash-table-test-hash-function test)
                               :rehash-size rehash-size
@@ -318,11 +325,12 @@ Requires at least one completely unbound slot to terminate."
 (defun hash-table-rehash (hash-table resize-p)
   "Resize and rehash HASH-TABLE so that there are no tombstones the usage
 is below the rehash-threshold."
-  (let ((new-size (if resize-p
-                      (if (floatp (hash-table-rehash-size hash-table))
-                          (ceiling (* (strong-hash-table-size hash-table) (hash-table-rehash-size hash-table)))
-                          (+ (strong-hash-table-size hash-table) (hash-table-rehash-size hash-table)))
-                      (strong-hash-table-size hash-table)))
+  (let ((new-size (align-up-to-power-of-two
+                   (if resize-p
+                       (if (floatp (hash-table-rehash-size hash-table))
+                           (ceiling (* (strong-hash-table-size hash-table) (hash-table-rehash-size hash-table)))
+                           (+ (strong-hash-table-size hash-table) (hash-table-rehash-size hash-table)))
+                       (strong-hash-table-size hash-table))))
         (old-size (strong-hash-table-size hash-table))
         (old-storage (hash-table-storage hash-table)))
     (setf (hash-table-storage hash-table) (make-array (* new-size 2)
@@ -642,11 +650,12 @@ Requires at least one completely unbound slot to terminate."
 (defun weak-hash-table-rehash (hash-table resize-p)
   "Resize and rehash HASH-TABLE so that there are no tombstones the usage
 is below the rehash-threshold."
-  (let ((new-size (if resize-p
-                      (if (floatp (hash-table-rehash-size hash-table))
-                          (ceiling (* (hash-table-size hash-table) (hash-table-rehash-size hash-table)))
-                          (+ (hash-table-size hash-table) (hash-table-rehash-size hash-table)))
-                      (hash-table-size hash-table)))
+  (let ((new-size (align-up-to-power-of-two
+                   (if resize-p
+                       (if (floatp (hash-table-rehash-size hash-table))
+                           (ceiling (* (hash-table-size hash-table) (hash-table-rehash-size hash-table)))
+                           (+ (hash-table-size hash-table) (hash-table-rehash-size hash-table)))
+                       (hash-table-size hash-table))))
         (old-size (hash-table-size hash-table))
         (old-storage (hash-table-storage hash-table)))
     (setf (hash-table-storage hash-table) (make-array new-size
