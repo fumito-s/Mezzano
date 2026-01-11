@@ -14,7 +14,8 @@
 (defstruct (hash-table
              (:constructor %make-hash-table))
   (test 'eql :type (member eq eql equal equalp) :read-only t)
-  (hash-function nil :read-only t)
+  (test-function (error "Unreachable, missing test-function") :type function :read-only t)
+  (hash-function (error "Unreachable, missing hash-function") :type function :read-only t)
   (%count 0)
   (used 0)
   (rehash-size 1 :type (or (integer 1 *) (float (1.0) *)))
@@ -103,10 +104,10 @@
 
 (defun hash-table-test-hash-function (test)
   (ecase test
-    ((eq) 'eq-hash)
-    ((eql) 'eql-hash)
-    ((equal) 'sxhash)
-    ((equalp) 'equalp-hash)))
+    ((eq) #'eq-hash)
+    ((eql) #'eql-hash)
+    ((equal) #'sxhash)
+    ((equalp) #'equalp-hash)))
 
 (defun hash-table-enforce-gc-invariant-keys (hash-table)
   (eql (hash-table-gc-invariant hash-table) :mandatory))
@@ -126,6 +127,7 @@
   (check-type weakness (member nil :key :value :key-or-value :key-and-value))
   (setf size (align-up-to-power-of-two size))
   (let ((ht (%make-hash-table :test test
+                              :test-function (%coerce-to-callable test)
                               :hash-function (hash-table-test-hash-function test)
                               :rehash-size rehash-size
                               :rehash-threshold rehash-threshold
@@ -289,7 +291,7 @@
   (do* ((free-slot nil)
         (hash (funcall (hash-table-hash-function hash-table) key))
         (size (strong-hash-table-size hash-table))
-        (test (hash-table-test hash-table))
+        (test (hash-table-test-function hash-table))
         (storage (hash-table-storage hash-table))
         (unbound-marker *hash-table-unbound-value*)
         (tombstone *hash-table-tombstone*)
