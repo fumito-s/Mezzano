@@ -143,3 +143,18 @@ the seperator character."
     (when (eql (char string i) character)
       (push (subseq string elt-start i) elements)
       (setf elt-start (1+ i)))))
+
+(defun hash-string (string)
+  (cond ((sys.int::character-array-p string)
+         (hash-simple-numeric-1d-array
+          (sys.int::%complex-array-storage string)))
+        (t
+         ;; Possibly a displaced string, fall back on the old hash function.
+         (check-type string string)
+         ;; djb2 string hash
+         ;; We use 25-bit characters (unicode+bucky bits), instead of 8-bit chars.
+         ;; I'm unsure how that'll change the behaviour of the hash function
+         (let ((hash 5381))
+           (dotimes (i (length string) hash)
+             (setf hash (logand #xFFFFFFFF (+ (logand #xFFFFFFFF (* hash 33))
+                                              (char-int (char string i))))))))))
