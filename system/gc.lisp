@@ -1321,7 +1321,7 @@ a pointer to the new object. Leaves a forwarding pointer in place."
          (#.+object-tag-sse-vector+
           4)
          (#.+object-tag-simd-pack+
-          (mezzano.simd::simd-pack-size object))
+          (mezzano.simd::simd-pack-total-size object))
          (#.+object-tag-symbol+
           6)
          ((#.+object-tag-instance+

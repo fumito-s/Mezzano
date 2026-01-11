@@ -705,7 +705,8 @@
            #:transmute-simd-pack
            #:simd-pack-element-type
            #:simd-pack-element-count
-           #:simd-pack-element))
+           #:simd-pack-element
+           #:simd-pack-size))
 
 (defpackage :mezzano.simd.x86-64
   (:use :cl)

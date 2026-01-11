@@ -147,7 +147,7 @@
   (int::%define-compound-type 'simd-pack 'simd-pack-type-p)
   (int::%define-compound-type-optimizer 'simd-pack 'compile-simd-pack-type))
 
-(defun simd-pack-size (simd-pack)
+(defun simd-pack-total-size (simd-pack)
   "Return the total size, in words, of the simd-pack. Don't use, this is for the GC."
   (int::%type-check simd-pack int::+object-tag-simd-pack+ 'simd-pack)
   (let* ((header (int::%object-header-data simd-pack))
@@ -185,6 +185,14 @@
   (let* ((header (int::%object-header-data simd-pack))
          (count (ldb +simd-pack-element-count+ header)))
     (ash 1 count)))
+
+(defun simd-pack-size (simd-pack)
+  "Return the total number of bits in the simd-pack."
+  (int::%type-check simd-pack int::+object-tag-simd-pack+ 'simd-pack)
+  (let* ((header (int::%object-header-data simd-pack))
+         (width (ldb +simd-pack-element-width+ header))
+         (count (ldb +simd-pack-element-count+ header)))
+    (ash 1 (+ width count))))
 
 (defun make-simd-pack (element-type &rest elements)
   (let* ((count (length elements))
@@ -332,7 +340,7 @@ of the new simd-pack must be the same as the old simd-pack."
                     int::+object-tag-simd-pack+
                     ;; Pad word, for alignment.
                     header (1+ size) nil)))
-    (assert (eql (simd-pack-size simd-pack) (simd-pack-size new-pack)))
+    (assert (eql (simd-pack-total-size simd-pack) (simd-pack-total-size new-pack)))
     (dotimes (i (1+ size))
       (setf (int::%object-ref-unsigned-byte-64 new-pack i)
             (int::%object-ref-unsigned-byte-64 simd-pack i)))
