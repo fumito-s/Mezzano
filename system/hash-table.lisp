@@ -436,6 +436,8 @@ is below the rehash-threshold."
                  (eql-hash (imagpart object))))
         ((double-float-p object)
          (%double-float-as-integer object))
+        ((short-float-p object)
+         (%short-float-as-integer object))
         (t
          ;; Fixnums, single-floats, and characters are immediate objects and
          ;; can be safely hashed by their "address".
