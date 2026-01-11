@@ -608,6 +608,10 @@
           (symbol-plist symbol) '()
           (symbol-package symbol) nil)
     (setf (sys.int::%object-ref-t symbol sys.int::+symbol-type+) 't)
+    ;; This is also set in cold-start for the initial symbols. Must stay in sync.
+    (setf (ldb sys.int::+symbol-header-hash+ (sys.int::%object-header-data symbol))
+          (ldb (byte (byte-size sys.int::+symbol-header-hash+) 0)
+               (sys.int::hash-string (symbol-name symbol))))
     symbol))
 
 (defun copy-symbol (symbol &optional copy-properties)

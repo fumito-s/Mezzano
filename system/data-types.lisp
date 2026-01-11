@@ -158,6 +158,7 @@
 (defconstant +symbol-value-cell-value+ 2)
 
 (defconstant +symbol-header-mode+ (byte 3 0))
+(defconstant +symbol-header-hash+ (byte 32 3))
 
 (defconstant +symbol-mode-nil+ 0)
 (defconstant +symbol-mode-special+ 1)

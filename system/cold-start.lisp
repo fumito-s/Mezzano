@@ -229,6 +229,16 @@ Cold-generator sets up just enough stuff for functions to be called, for
 structures to exist, and for memory to be allocated, but not much beyond that."
   (setf *cold-start-start-time* (get-internal-run-time))
   (cold-array-initialization)
+  ;; Symbols in the cold image start off without their hashes, calculate them early.
+  (dolist (area '(:wired :general))
+    (walk-area
+     area
+     (lambda (object address size)
+       (declare (ignore address size))
+       (when (symbolp object)
+         (setf (ldb +symbol-header-hash+ (%object-header-data object))
+               (ldb (byte (byte-size +symbol-header-hash+) 0)
+                    (hash-string (symbol-name object))))))))
   (setf *package* nil
         *terminal-io* :cold-stream
         *standard-output* :cold-stream

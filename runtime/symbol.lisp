@@ -292,3 +292,7 @@
   (sys.int::%xchg-object (symbol-value-cell symbol)
                          sys.int::+symbol-value-cell-value+
                          new-value))
+
+(defun sys.int::symbol-hash (symbol)
+  (sys.int::%type-check symbol sys.int::+object-tag-symbol+ 'symbol)
+  (ldb sys.int::+symbol-header-hash+ (sys.int::%object-header-data symbol)))
