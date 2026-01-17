@@ -488,7 +488,7 @@ code to be loaded.
       :implicit-for-required (not (null ansi))
       :type-keywords (maketable type-keywords)
       :type-symbols (let* ((size (length type-symbols))
-			   (ht (make-hash-table :test #'eq :enforce-gc-invariant-keys t)))
+			   (ht (make-hash-table :test #'eql :enforce-gc-invariant-keys t)))
 		      (dolist (x type-symbols)
 			(if (atom x) (setf (gethash x ht) x) (setf (gethash (car x) ht) (cadr x))))
 		      ht))))

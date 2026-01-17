@@ -200,7 +200,7 @@
                 old new))
 
 (defvar *symbol-plists*
-  (make-hash-table :test #'eq
+  (make-hash-table :test #'eql
                    :synchronized t
                    :enforce-gc-invariant-keys t
                    :weakness :key))

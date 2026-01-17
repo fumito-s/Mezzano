@@ -275,16 +275,16 @@ structures to exist, and for memory to be allocated, but not much beyond that."
         *hash-table-tombstone* (list "hash-table tombstone")
         *deferred-%defpackage-calls* '())
   ;; System tables.
-  (setf *macros* (make-hash-table :test #'eq :synchronized t :weakness :key))
-  (setf *symbol-function-info* (make-hash-table :test #'eq :enforce-gc-invariant-keys t :weakness :key)
-        *setf-function-info* (make-hash-table :test #'eq :enforce-gc-invariant-keys t :weakness :key)
-        *cas-function-info* (make-hash-table :test #'eq :enforce-gc-invariant-keys t :weakness :key)
+  (setf *macros* (make-hash-table :test #'eql :synchronized t :weakness :key))
+  (setf *symbol-function-info* (make-hash-table :test #'eql :enforce-gc-invariant-keys t :weakness :key)
+        *setf-function-info* (make-hash-table :test #'eql :enforce-gc-invariant-keys t :weakness :key)
+        *cas-function-info* (make-hash-table :test #'eql :enforce-gc-invariant-keys t :weakness :key)
         *function-info-lock* (mezzano.supervisor:make-rw-lock '*function-info-lock*))
   (setf *setf-expanders* (make-hash-table :test #'eq :synchronized t :weakness :key))
-  (setf *type-info* (make-hash-table :test #'eq :enforce-gc-invariant-keys t :weakness :key)
+  (setf *type-info* (make-hash-table :test #'eql :enforce-gc-invariant-keys t :weakness :key)
         *type-info-lock* (mezzano.supervisor:make-rw-lock '*type-info*))
   ;; Put initial classes into the class table.
-  (setf mezzano.clos::*class-reference-table* (make-hash-table :test #'eq :enforce-gc-invariant-keys t :weakness :key)
+  (setf mezzano.clos::*class-reference-table* (make-hash-table :test #'eql :enforce-gc-invariant-keys t :weakness :key)
         mezzano.clos::*class-reference-table-lock* (mezzano.supervisor:make-rw-lock 'mezzano.clos::*class-reference-table*))
   (loop for cref across *initial-cref-obarray*
         do (setf (gethash (mezzano.clos::class-reference-name cref)
