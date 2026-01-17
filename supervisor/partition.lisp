@@ -108,9 +108,9 @@
                          size
                          sector-size
                          (disk-max-transfer disk)
-                         'read-disk-partition
-                         'write-disk-partition
-                         'flush-disk-partition
+                         #'read-disk-partition
+                         #'write-disk-partition
+                         #'flush-disk-partition
                          nil))))))
 
 (defun detect-gpt-partition-table (disk)
@@ -177,9 +177,9 @@
                              size
                              sector-size
                              (disk-max-transfer disk)
-                             'read-disk-partition
-                             'write-disk-partition
-                             'flush-disk-partition
+                             #'read-disk-partition
+                             #'write-disk-partition
+                             #'flush-disk-partition
                              nil)
               (when (or (eql part-type #x05) (eql part-type #x0F))
                 (setf ebr-lba start-lba)))))
@@ -210,9 +210,9 @@
                                 size
                                 sector-size
                                 (disk-max-transfer disk)
-                                'read-disk-partition
-                                'write-disk-partition
-                                'flush-disk-partition
+                                #'read-disk-partition
+                                #'write-disk-partition
+                                #'flush-disk-partition
                                 nil)
                  (incf part-num))
              if (eql ebr-offset 0)
@@ -290,8 +290,8 @@
                                     (ceiling length 2048)
                                     2048
                                     (disk-max-transfer disk)
-                                    'read-disk-partition
-                                    'write-disk-partition
-                                    'flush-disk-partition
+                                    #'read-disk-partition
+                                    #'write-disk-partition
+                                    #'flush-disk-partition
                                     nil))
                    (incf offset rec-len)))))))))

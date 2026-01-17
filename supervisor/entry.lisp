@@ -141,12 +141,12 @@
           *paging-disk* nil)
     (initialize-physical-allocator)
     (initialize-early-video)
-    (when (not (boundp 'mezzano.runtime::*active-catch-handlers*))
+    (when (not (boundp '*boot-id*))
       (setf first-run-p t)
       (mezzano.runtime::first-run-initialize-allocator)
       ;; FIXME: Should be done by cold generator
-      (setf mezzano.runtime::*active-catch-handlers* 'nil
-            *pseudo-atomic* nil
+      (setf (sys.int::symbol-global-value 'mezzano.runtime::*active-catch-handlers*) 'nil
+            (sys.int::symbol-global-value '*pseudo-atomic*) nil
             sys.int::*known-finalizers* nil
             *big-wait-for-objects-lock* (place-spinlock-initializer)))
     (initialize-early-platform)

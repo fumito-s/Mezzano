@@ -117,7 +117,7 @@
   (let* ((dev (make-virtio-legacy-mmio-device
                :mmio address
                :mmio-irq irq
-               :transport 'virtio-legacy-mmio-transport
+               :transport #'virtio-legacy-mmio-transport
                :boot-id (sup:current-boot-id)))
          (magic (virtio-mmio-magic dev))
          (version (virtio-mmio-version dev))

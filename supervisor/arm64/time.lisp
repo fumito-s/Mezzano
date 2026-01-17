@@ -31,7 +31,7 @@
     (when (not (boundp '*rtc-adjust*))
       (setf *rtc-adjust* 0))
     (irq-attach (platform-irq irq)
-                'generic-timer-irq-handler
+                #'generic-timer-irq-handler
                 fdt-node
                 :exclusive t)
     ;; Set countdown value.

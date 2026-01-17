@@ -226,7 +226,7 @@
                    (first form)))
          (fn (when (or (symbolp name)
                        (and (consp name)
-                            (eq (first name) 'setf)))
+                            (member (first name) '(setf sys.int::cas))))
                (compiler-macro-function name env))))
     (when (and fn
                (not (eql (inline-info-in-environment name env) 'notinline)))

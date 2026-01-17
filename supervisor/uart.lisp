@@ -96,4 +96,4 @@
   (setf *debug-uart-base* base
         *debug-uart-lock* :unlocked
         *uart-at-line-start* t)
-  (debug-set-output-pseudostream 'debug-uart-stream))
+  (debug-set-output-pseudostream #'debug-uart-stream))

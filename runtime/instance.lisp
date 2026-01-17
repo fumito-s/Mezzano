@@ -177,7 +177,7 @@
   (let ((instance-slots (sys.int::layout-instance-slots layout)))
     (loop
        for i below (sys.int::%object-header-data instance-slots) by 2 ; avoid calling length on the slot vector, it's a simple-vector.
-       when (eql slot-name (sys.int::%object-ref-t instance-slots i))
+       when (eq slot-name (sys.int::%object-ref-t instance-slots i))
        do (return (sys.int::%object-ref-t instance-slots (1+ i)))
        finally (error "Instance slot ~S missing from layout ~S" slot-name layout))))
 

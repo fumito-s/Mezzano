@@ -118,11 +118,28 @@
 (defun sys.int::symbol-global-value (symbol)
   (symbol-value-cell-value (symbol-global-value-cell symbol)))
 
+(define-compiler-macro (setf sys.int::symbol-global-value) (&whole whole value symbol)
+  (cond ((and (typep symbol '(cons (eql quote) (cons symbol null)))
+              (not (symbol-constant-p (second symbol)))
+              (eql (symbol-type (second symbol)) 't))
+         `(setf (symbol-value-cell-value (symbol-global-value-cell ',(second symbol))) ,value))
+        (t
+         whole)))
+
 (defun (setf sys.int::symbol-global-value) (value symbol)
   (sys.int::%type-check symbol sys.int::+object-tag-symbol+ 'symbol)
   (modifying-symbol-value symbol)
   (check-symbol-value-type value symbol)
   (setf (symbol-value-cell-value (symbol-global-value-cell symbol)) value))
+
+(define-compiler-macro (sys.int::cas sys.int::symbol-global-value) (&whole whole old new symbol)
+  (cond ((and (typep symbol '(cons (eql quote) (cons symbol null)))
+              (not (symbol-constant-p (second symbol)))
+              (eql (symbol-type (second symbol)) 't))
+         `(sys.int::cas (symbol-value-cell-value (symbol-global-value-cell ',(second symbol)))
+                        ,old ,new))
+        (t
+         whole)))
 
 (defun (sys.int::cas sys.int::symbol-global-value) (old new symbol)
   (sys.int::%type-check symbol sys.int::+object-tag-symbol+ 'symbol)
@@ -200,6 +217,13 @@
       (setf (gethash symbol *symbol-plists*) value))
   value)
 
+(define-compiler-macro boundp (&whole whole symbol)
+  (cond ((and (typep symbol '(cons (eql quote) (cons symbol null)))
+              (symbol-global-p (second symbol)))
+         `(symbol-value-cell-boundp (symbol-global-value-cell ,symbol)))
+        (t
+         whole)))
+
 (defun boundp (symbol)
   (when (symbol-global-value-cell symbol nil)
     (symbol-value-cell-boundp (symbol-value-cell symbol))))
@@ -249,7 +273,20 @@
           ((:global) sys.int::+symbol-mode-global+)))
   value)
 
-(declaim (inline sys.int::%atomic-fixnum-add-symbol))
+(define-compiler-macro sys.int::%atomic-fixnum-add-symbol (&whole whole symbol value)
+  (cond ((and (typep symbol '(cons (eql quote) (cons symbol null)))
+              (symbol-global-p (second symbol)))
+         (let ((value-sym (gensym "VALUE")))
+           `(let ((,value-sym ,value))
+              (when (not (sys.int::fixnump ,value-sym))
+                (sys.int::raise-type-error ,value-sym 'fixnum)
+                (sys.int::%%unreachable))
+              (sys.int::%atomic-fixnum-add-object (symbol-global-value-cell ,symbol)
+                                                  sys.int::+symbol-value-cell-value+
+                                                  ,value-sym))))
+        (t
+         whole)))
+
 (defun sys.int::%atomic-fixnum-add-symbol (symbol value)
   (when (not (sys.int::fixnump value))
     (sys.int::raise-type-error value 'fixnum))

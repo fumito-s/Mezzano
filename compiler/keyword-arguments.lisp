@@ -72,7 +72,7 @@
                   (chk-head
                    (progn
                      (let ((current-keyword (call mezzano.runtime::%car chk-itr)))
-                       (if (call member current-keyword (quote (:allow-other-keys ,@valid-keywords)))
+                       (if (call member current-keyword (quote (:allow-other-keys ,@valid-keywords)) (quote :test) (quote eq))
                            (quote nil)
                            (call error
                                  'sys.int::simple-program-error

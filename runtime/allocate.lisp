@@ -848,10 +848,8 @@
          do
            (setf (sys.int::%object-ref-t object sys.int::+weak-pointer-finalizer-link+)
                  prev-finalizer)
-           (when (eql (sys.int::cas (sys.int::symbol-global-value 'sys.int::*known-finalizers*)
-                                    prev-finalizer
-                                    object)
-                      prev-finalizer)
+           (when (eq (sys.int::cas sys.int::*known-finalizers* prev-finalizer object)
+                     prev-finalizer)
              (return))))
     ;; Keep KEY & VALUE live until the weak pointer has been fully filled in.
     (with-live-objects (key value)

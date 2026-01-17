@@ -230,4 +230,4 @@
                                              +serial-mcr-auxiliary-output-2+)
        ;; Enable RX interrupts.
        (uart-16550-reg +serial-IER+) +serial-ier-received-data-available+)))
-  (debug-set-output-pseudostream 'debug-serial-stream))
+  (debug-set-output-pseudostream #'debug-serial-stream))

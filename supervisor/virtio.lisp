@@ -175,7 +175,7 @@
               for fn in transport-functions
               collect (if (consp fn) ; setf function.
                           (list (first fn) `#'(setf ,(intern (format nil "~A-~A" name (second fn)))))
-                          (list fn `',(intern (format nil "~A-~A" name fn)))))))))
+                          (list fn `#',(intern (format nil "~A-~A" name fn)))))))))
 
 (defstruct (virtio-device
              (:area :wired))

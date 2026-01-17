@@ -137,7 +137,7 @@
                          capacity
                          512
                          256
-                         'virtio-block-read 'virtio-block-write 'virtio-block-flush
+                         #'virtio-block-read #'virtio-block-write #'virtio-block-flush
                          nil))
     ;; Configuration complete, go to OK mode.
     (setf (virtio:virtio-device-status device) (logior virtio:+virtio-status-acknowledge+

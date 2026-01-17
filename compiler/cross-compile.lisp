@@ -768,3 +768,11 @@ This should only fill in the START- slots and ignore the END- slots.")
       (setf reference (make-instance 'mezzano.clos::class-reference :name name))
       (setf (gethash name *class-reference-table*) reference))
     reference))
+
+(defun mezzano.runtime::symbol-constant-p (symbol)
+  (or (keywordp symbol)
+      (member symbol '(nil t))
+      (eql (gethash symbol cross-support::*system-symbol-declarations*) :constant)))
+
+(defun mezzano.runtime::symbol-global-p (symbol)
+  (eql (gethash symbol cross-support::*system-symbol-declarations*) :global))

@@ -63,7 +63,7 @@ Can be :TOP to position them at the top of the screen, :BOTTOM to position them 
                                                   :pitch pitch
                                                   :layout layout
                                                   :damage-fn (or damage-fn
-                                                                 'framebuffer-dummy-damage)
+                                                                 #'framebuffer-dummy-damage)
                                                   :device device
                                                   :blit-fn blit-fn
                                                   :fill-fn fill-fn

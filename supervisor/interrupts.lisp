@@ -103,20 +103,20 @@ RETURN-FROM/GO must not be used to leave this form."
 
 (defmacro acquire-symbol-spinlock (lock)
   (check-type lock symbol)
-  `(acquire-place-spinlock (sys.int::symbol-global-value ',lock)))
+  `(acquire-place-spinlock ,lock))
 
 (defmacro release-symbol-spinlock (lock)
   (check-type lock symbol)
-  `(release-place-spinlock (sys.int::symbol-global-value ',lock)))
+  `(release-place-spinlock ,lock))
 
 (defmacro with-symbol-spinlock ((lock) &body body)
   (check-type lock symbol)
-  `(with-place-spinlock ((sys.int::symbol-global-value ',lock))
+  `(with-place-spinlock (,lock)
      ,@body))
 
 (defmacro ensure-symbol-spinlock-held (lock)
   (check-type lock symbol)
-  `(ensure-place-spinlock-held (sys.int::symbol-global-value ',lock)))
+  `(ensure-place-spinlock-held ,lock))
 
 (defmacro with-page-fault-hook (((&optional frame info fault-address) &body hook-body) &body body)
   (let ((old (gensym))
