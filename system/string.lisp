@@ -147,7 +147,9 @@ the seperator character."
 (defun hash-string (string)
   (cond ((sys.int::character-array-p string)
          (hash-simple-numeric-1d-array
-          (sys.int::%complex-array-storage string)))
+          (sys.int::%complex-array-storage string)
+          0
+          (length string)))
         (t
          ;; Possibly a displaced string, fall back on the old hash function.
          (check-type string string)

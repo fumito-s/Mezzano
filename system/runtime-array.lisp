@@ -576,42 +576,59 @@
     (when (%object-of-type-p array (specialized-array-definition-tag info))
       (return info))))
 
-(defun hash-simple-numeric-1d-array (array)
+(defun hash-simple-numeric-1d-array (array &optional (start 0) end)
   (declare (optimize speed (safety 0)))
-  (let* ((length (the fixnum (%object-header-data array)))
-         (words (ecase (the fixnum (%object-tag array))
-                  ((#.+object-tag-array-bit+
-                    #.+object-tag-array-signed-byte-1+)
-                   (ceiling length 64))
-                  ((#.+object-tag-array-unsigned-byte-2+
-                    #.+object-tag-array-signed-byte-2+)
-                   (ceiling length 32))
-                  ((#.+object-tag-array-unsigned-byte-4+
-                    #.+object-tag-array-signed-byte-4+)
-                   (ceiling length 16))
-                  ((#.+object-tag-array-unsigned-byte-8+
-                    #.+object-tag-array-signed-byte-8+)
-                   (ceiling length 8))
-                  ((#.+object-tag-array-unsigned-byte-16+
-                    #.+object-tag-array-signed-byte-16+
-                    #.+object-tag-array-short-float+)
-                   (ceiling length 4))
-                  ((#.+object-tag-array-unsigned-byte-32+
-                    #.+object-tag-array-signed-byte-32+
-                    #.+object-tag-array-single-float+
-                    #.+object-tag-array-complex-short-float+)
-                   (ceiling length 2))
-                  ((#.+object-tag-array-fixnum+
-                    #.+object-tag-array-unsigned-byte-64+
-                    #.+object-tag-array-signed-byte-64+
-                    #.+object-tag-array-double-float+
-                    #.+object-tag-array-complex-single-float+)
-                   length)
-                  (#.+object-tag-array-complex-double-float+
-                   (* length 2)))))
-    (loop with hash = (logxor (ldb (byte 32 0) length)
-                              (ldb (byte 32 32) length))
-          for i below (truncate words 2) ; produce a 32-bit hash
-          for hword = (%object-ref-unsigned-byte-32 array i)
-          do (setf hash (logxor hash hword))
-          finally (return hash))))
+  ;; This is actually a huge pain to do because it involves shifting
+  ;; partial words around.
+  (assert (eql start 0) (start) "TODO: Non-zero start")
+  (let* ((length (the fixnum (%object-header-data array))))
+    (setf end (or end length))
+    (multiple-value-bind (count end-mask)
+        (ecase (the fixnum (%object-tag array))
+          ((#.+object-tag-array-bit+
+            #.+object-tag-array-signed-byte-1+)
+           (values (ceiling end 32) -1))
+          ((#.+object-tag-array-unsigned-byte-2+
+            #.+object-tag-array-signed-byte-2+)
+           (values (ceiling end 16) -1))
+          ((#.+object-tag-array-unsigned-byte-4+
+            #.+object-tag-array-signed-byte-4+)
+           (values (ceiling end 8) -1))
+          ((#.+object-tag-array-unsigned-byte-8+
+            #.+object-tag-array-signed-byte-8+)
+           (values (ceiling end 4)
+                   (ecase (logand end 3)
+                     (0 #xFFFFFFFF)
+                     (1 #x000000FF)
+                     (2 #x0000FFFF)
+                     (3 #x00FFFFFF))))
+          ((#.+object-tag-array-unsigned-byte-16+
+            #.+object-tag-array-signed-byte-16+
+            #.+object-tag-array-short-float+)
+           (values (ceiling end 2)
+                   (ecase (logand end 1)
+                     (0 #xFFFFFFFF)
+                     (1 #x0000FFFF))))
+          ((#.+object-tag-array-unsigned-byte-32+
+            #.+object-tag-array-signed-byte-32+
+            #.+object-tag-array-single-float+
+            #.+object-tag-array-complex-short-float+)
+           (values end -1))
+          ((#.+object-tag-array-fixnum+
+            #.+object-tag-array-unsigned-byte-64+
+            #.+object-tag-array-signed-byte-64+
+            #.+object-tag-array-double-float+
+            #.+object-tag-array-complex-single-float+)
+           (values (* end 2) -1))
+          (#.+object-tag-array-complex-double-float+
+           (values (* end 4) -1)))
+      (loop with hash = (logxor (ldb (byte 32 0) (- end start))
+                                (ldb (byte 32 32) (- end start)))
+            for i below (1- count)
+            for hword = (%object-ref-unsigned-byte-32 array i)
+            do (setf hash (logxor hash hword))
+            finally (when (plusp count)
+                      (setf hash (logxor hash
+                                         (logand (%object-ref-unsigned-byte-32 array (1- count))
+                                                 end-mask)))
+                      (return hash))))))
