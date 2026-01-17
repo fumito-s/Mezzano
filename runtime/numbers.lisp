@@ -682,6 +682,7 @@
      (sys.int::%truncate number 1))))
 
 ;;; From SBCL 1.0.55
+(declaim (inline ceiling))
 (defun ceiling (number &optional (divisor 1))
   ;; If the numbers do not divide exactly and the result of
   ;; (/ NUMBER DIVISOR) would be positive then increment the quotient

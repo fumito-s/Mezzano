@@ -40,11 +40,12 @@
          (eql (ldb +address-tag+ (lisp-object-address object))
               +address-tag-pinned+)))
     (eql
-     ;; As with EQ, plus some numbers
+     ;; As with EQ, plus numbers and symbols.
      (or (immediatep object)
          (eql (ldb +address-tag+ (lisp-object-address object))
               +address-tag-pinned+)
-         (numberp object)))
+         (numberp object)
+         (symbolp object)))
     (equal
      (labels ((frob (object depth)
                 (when (zerop depth)
@@ -60,6 +61,7 @@
                          (not (consp object)))
                     (numberp object)
                     (stringp object)
+                    (symbolp object)
                     (bit-vector-p object)
                     (pathnamep object)
                     (and (consp object)
@@ -67,7 +69,7 @@
                          (frob (cdr object) (1- depth))))))
        (frob object 10)))
     (equalp
-     ;; Don't allow arbitray pinned heap objects. EQUALP gets really hairy.
+     ;; Don't allow arbitrary pinned heap objects. EQUALP gets really hairy.
      (or (immediatep object)
          (numberp object)
          (symbolp object)
@@ -438,6 +440,8 @@ is below the rehash-threshold."
          (%double-float-as-integer object))
         ((short-float-p object)
          (%short-float-as-integer object))
+        ((symbolp object)
+         (symbol-hash object))
         (t
          ;; Fixnums, single-floats, and characters are immediate objects and
          ;; can be safely hashed by their "address".
@@ -451,15 +455,9 @@ is below the rehash-threshold."
         (cons (logxor (sxhash-1 (car object) (1- depth))
                       (sxhash-1 (cdr object) (1- depth))))
         (string
-         ;; djb2 string hash
-         ;; We use 25-bit characters (unicode+bucky bits), instead of 8-bit chars.
-         ;; I'm unsure how that'll change the behaviour of the hash function
-         (let ((hash 5381))
-           (dotimes (i (length object) hash)
-             (setf hash (logand #xFFFFFFFF (+ (logand #xFFFFFFFF (* hash 33))
-                                              (char-int (char object i))))))))
+         (hash-string object))
         (symbol
-         (sxhash-1 (string object) depth))
+         (symbol-hash object))
         (t
          ;; ### Bootstrap hack. Don't call typep with 'pathname.
          (if (pathnamep object)
