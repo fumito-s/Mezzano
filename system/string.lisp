@@ -144,6 +144,9 @@ the seperator character."
       (push (subseq string elt-start i) elements)
       (setf elt-start (1+ i)))))
 
+;; FIXME: This doesn't hash nicely across different encodings - wide strings
+;; don't hash to the same value as narrow strings. Need to effectively promote
+;; each element to 32-bits or something first.
 (defun hash-string (string)
   (cond ((sys.int::character-array-p string)
          (hash-simple-numeric-1d-array
