@@ -469,9 +469,8 @@ This is required to make the GC interrupt safe."
               (t
                ;; Only the iret frame remains on the stack.
                (sys.int::%copy-words (+ interrupt-stack-pointer (* 15 8))
-                                        (* 15 8))
                                      stack-pointer
-                                     5))
+                                     5)))
         (return-from scavenge-interrupt-stack-frame
           (scavenge-interrupt-stack-frame interrupt-stack-pointer cycle-kind)))
       ;; Unconditionally scavenge the saved data registers.
