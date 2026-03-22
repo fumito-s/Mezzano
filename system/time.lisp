@@ -54,7 +54,7 @@
   (decode-universal-time (get-universal-time)))
 
 (defmacro time (form)
-  `(%time (lambda () (progn ,form))))
+  `(%time (lambda () (progn ,form)) ',form))
 
 (defun format-time (stream object &optional colon-p at-sign-p)
   (declare (ignore at-sign-p))
@@ -72,8 +72,7 @@
         (format stream "~:D minute~:P, " actual-minutes))
       (format stream "~:D second~:P" actual-seconds))))
 
-
-(defun %time (fn)
+(defun %time (fn form)
   (let* ((self (mezzano.supervisor:current-thread))
          (start-bytes-consed (mezzano.supervisor:thread-bytes-consed self))
          (start-time (get-universal-time))
@@ -94,7 +93,7 @@
              (finish-run-time (float (/ (- (mezzano.supervisor:thread-run-time self) start-run-time)
                                         internal-time-units-per-second))))
         (fresh-line *trace-output*)
-        (format *trace-output* "; Execution took ~:/mezzano.internals::format-time/.~%" finish-time)
+        (format *trace-output* "; Execution of ~S took ~:/mezzano.internals::format-time/.~%" form finish-time)
         (format *trace-output* "; ~:D seconds of run time, ~:D seconds of GC time, ~:D allocation time.~%"
                 finish-run-time finish-gc-time finish-alloc-time)
         (when (plusp finish-time)
