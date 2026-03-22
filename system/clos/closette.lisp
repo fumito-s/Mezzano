@@ -1057,6 +1057,7 @@ Other arguments are included directly."
           (make-array (* (length instance-slots) 2)))
          (layout (sys.int::make-layout
                   :class class
+                  :hash (safe-class-hash class)
                   :obsolete nil
                   :heap-size (compute-class-heap-size class instance-slots)
                   :heap-layout t
@@ -2742,6 +2743,7 @@ always match."
     ;; Cook up a layout & instance for this class.
     (sys.int::%allocate-instance
      (sys.int::make-layout :class class
+                           :hash (safe-class-hash class)
                            :obsolete nil
                            :heap-size 0
                            :heap-layout t

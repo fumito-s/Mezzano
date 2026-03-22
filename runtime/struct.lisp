@@ -289,6 +289,7 @@
                                                 has-standard-constructor))
          (layout-object (sys.int::make-layout
                          :class def
+                         ;; FIXME: We need a class hash for the struct definition.
                          :obsolete nil
                          :heap-size size
                          ;; Layout must be pinned or wired.

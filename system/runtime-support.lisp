@@ -445,6 +445,8 @@
           mezzano.clos::*secret-unbound-value*)
     (setf (mezzano.runtime::instance-access-by-name new-class 'mezzano.clos::slot-storage-layout)
           (make-layout :class new-class
+                       :hash (mezzano.runtime::instance-access-by-name
+                              new-class 'mezzano.clos::hash)
                        :obsolete nil
                        :heap-size (structure-definition-size sdef)
                        :heap-layout (layout-heap-layout (structure-definition-layout sdef))

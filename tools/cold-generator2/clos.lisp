@@ -141,6 +141,7 @@
                              (aref instance-slots (1+ i)) (mezzano.runtime::make-location mezzano.runtime::+location-type-t+ slot-index)))
                  (setf (getf (gethash class-name *primordial-class-table*) :instance-layout)
                        (sys.int::make-layout :class nil ; Fixed up later.
+                                             :hash nil ; Fixed up later.
                                              :obsolete nil
                                              :heap-size (+ funcallable-offset (length layout))
                                              :heap-layout t
@@ -157,6 +158,7 @@
                              (aref instance-slots (1+ i)) (env:structure-slot-definition-location slot)))
                  (setf (getf (gethash class-name *primordial-class-table*) :instance-layout)
                        (sys.int::make-layout :class nil ; Fixed up later.
+                                             :hash nil ; Fixed up later.
                                              :obsolete nil
                                              :heap-size (or (getf initargs :structure-heap-size) 0) ; hack for structure-object
                                              :heap-layout (getf initargs :structure-heap-layout) ; will be nil for structure-object, fine as it's zero-sized
@@ -480,7 +482,9 @@
                (let ((layout (getf def :instance-layout)))
                  (when layout
                    (setf (sys.int::layout-class layout)
-                         (getf def :real-class)))))
+                         (getf def :real-class))
+                   (setf (sys.int::layout-hash layout)
+                         (getf def :hash)))))
              *primordial-class-table*)
     ;; Start defining real classes.
     ;; Initialize every real class object, initializing it and preparing for

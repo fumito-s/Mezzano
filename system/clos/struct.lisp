@@ -115,6 +115,7 @@
   (assert (not (eql existing-class (find-class 'structure-object)))) ; Can't redefine structure-object.
   (assert (not (class-sealed existing-class)) () "Cannot redefined sealed struct ~S" existing-class)
   (let ((new-layout (sys.int::make-layout :class existing-class
+                                          :hash (safe-class-hash existing-class)
                                           :obsolete nil
                                           :heap-size (sys.int::structure-definition-size sdef)
                                           :heap-layout (sys.int::layout-heap-layout (sys.int::structure-definition-layout sdef))

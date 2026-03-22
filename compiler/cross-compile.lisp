@@ -76,6 +76,7 @@
 
 (defstruct layout
   class
+  hash
   obsolete
   heap-size
   heap-layout
