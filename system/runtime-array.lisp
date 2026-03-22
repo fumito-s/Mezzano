@@ -627,8 +627,9 @@
             for i below (1- count)
             for hword = (%object-ref-unsigned-byte-32 array i)
             do (setf hash (logxor hash hword))
-            finally (when (plusp count)
-                      (setf hash (logxor hash
-                                         (logand (%object-ref-unsigned-byte-32 array (1- count))
-                                                 end-mask)))
+            finally (progn
+                      (when (plusp count)
+                        (setf hash (logxor hash
+                                           (logand (%object-ref-unsigned-byte-32 array (1- count))
+                                                   end-mask))))
                       (return hash))))))
