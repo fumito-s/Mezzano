@@ -213,30 +213,18 @@
         (- sys.int::+object-data-shift+))
    0))
 
-(defstruct (obsolete-instance-layout
-             ;; Pinned, as the GC needs to read it.
-             ;; Don't make it wired to avoid thrashing the wired area.
-             (:area :pinned))
-  new-instance
-  old-layout)
-
-(defstruct (wired-obsolete-instance-layout
-             (:include obsolete-instance-layout)
-             (:area :wired))
-  ;; No new slots needed here, just changing the allocation area.
-  )
+;; TODO: Ideally this would allocate the new layout in the pinned area if the
+;; object is non-wired.
+(defun copy-layout-with-appropriate-area (layout)
+  (mezzano.internals::copy-layout layout))
 
 (defun supersede-instance (old-instance replacement)
   (let ((layout (sys.int::%instance-layout old-instance)))
-    (cond ((sys.int::layout-p layout)
-           ;; This really is a layout, not a superseded instance
-           (let ((new-layout (if (eql (sys.int::layout-area layout) :wired)
-                                 (make-wired-obsolete-instance-layout
-                                  :old-layout layout
-                                  :new-instance replacement)
-                                 (make-obsolete-instance-layout
-                                  :old-layout layout
-                                  :new-instance replacement))))
+    (cond ((null (sys.int::layout-new-instance layout))
+           ;; Hasn't been superseded before, we need to replace the layout
+           ;; so it's not shared.
+           (let ((new-layout (copy-layout-with-appropriate-area layout)))
+             (setf (sys.int::layout-new-instance new-layout) replacement)
              (with-live-objects (new-layout)
                ;; ###: Should this be a CAS?
                (setf (sys.int::%object-ref-unsigned-byte-64 old-instance -1)
@@ -254,12 +242,16 @@
            ;; FIXME: Can race with the GC. It can snap the old instance away
            ;; from underneath us, losing the replacement.
            ;; Check if the old instance's layout matches after this?
-           (setf (obsolete-instance-layout-new-instance layout)
-                 replacement))))
+           (setf (sys.int::layout-new-instance layout) replacement))))
   (values))
 
 (in-package :mezzano.internals)
 
+;; Data sharing warning!
+;; Freshly allocated objects all share the same layout for their class.
+;; A fresh object that's being superseded must allocate a new layout for
+;; that specific instance, otherwise setting the new-instance field will
+;; supersede **all** instances of that class!
 (defstruct (layout
              (:area :wired)
              :sealed
@@ -269,4 +261,14 @@
   (heap-size nil)
   (heap-layout nil)
   (area nil)
-  (instance-slots nil))
+  (instance-slots nil)
+  (new-instance nil))
+
+;; Fetch an object's real layout - that is, indirect through new-instance
+;; if it's present.
+(defun instance-real-layout (object)
+  (let* ((layout (%instance-layout object))
+         (new-instance (layout-new-instance layout)))
+    (if new-instance
+        (%instance-layout new-instance)
+        layout)))

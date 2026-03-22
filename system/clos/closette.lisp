@@ -184,8 +184,9 @@ the old or new values are expected to be unbound.")
 
 (defun fetch-up-to-date-instance-slots-and-layout (instance)
   (loop
-     (let ((layout (sys.int::%instance-layout instance)))
-       (cond ((sys.int::layout-p layout)
+    (let* ((layout (sys.int::%instance-layout instance))
+           (new-instance (sys.int::layout-new-instance layout)))
+       (cond ((null new-instance)
               (cond ((sys.int::layout-obsolete layout)
                      (update-instance-for-new-layout instance))
                     (t
@@ -193,15 +194,14 @@ the old or new values are expected to be unbound.")
              (t
               ;; Obsolete instance.
               ;; There should never be nested layers of obsolete instances.
-              (let* ((real-instance (mezzano.runtime::obsolete-instance-layout-new-instance layout))
-                     (real-layout (sys.int::%instance-layout real-instance)))
+              (let* ((real-layout (sys.int::%instance-layout new-instance)))
                 ;; But it's possible that the layout of the new instance is obsolete
-                ;; FIXME: This needs to use REAL-INSTANCE to populate the new instance,
+                ;; FIXME: This needs to use NEW-INSTANCE to populate the new instance,
                 ;; but the old instance must be what gets superseded.
                 (cond ((sys.int::layout-obsolete real-layout)
                        (update-instance-for-new-layout instance))
                       (t
-                       (return (values real-instance real-layout))))))))))
+                       (return (values new-instance real-layout))))))))))
 
 (defun find-effective-slot (object slot-name)
   (find slot-name (safe-class-slots (class-of object))
@@ -441,14 +441,13 @@ the old or new values are expected to be unbound.")
 
 (defun class-of (x)
   (cond ((sys.int::instance-or-funcallable-instance-p x)
-         (let ((layout (sys.int::%instance-layout x)))
-           (cond ((sys.int::layout-p layout)
+         (let* ((layout (sys.int::%instance-layout x))
+                (new-instance (sys.int::layout-new-instance layout)))
+           (cond ((null new-instance)
                   (sys.int::layout-class layout))
                  (t
                   ;; Obsolete instance.
-                  (class-of
-                   (mezzano.runtime::obsolete-instance-layout-new-instance
-                    layout))))))
+                  (class-of new-instance)))))
         (t
          (built-in-class-of x))))
 
@@ -3717,10 +3716,8 @@ always match."
 (defun update-instance-for-new-layout (instance)
   (let* ((class (class-of instance))
          (old-potentially-obsolete-layout (sys.int::%instance-layout instance))
-         (old-instance (if (sys.int::layout-p old-potentially-obsolete-layout)
-                           instance
-                           (mezzano.runtime::obsolete-instance-layout-new-instance
-                            old-potentially-obsolete-layout)))
+         (old-instance (or (sys.int::layout-new-instance old-potentially-obsolete-layout)
+                           instance))
          (old-layout (sys.int::%instance-layout old-instance))
          (new-layout (safe-class-slot-storage-layout class))
          (old-layout-slots (layout-instance-slots-list old-layout))

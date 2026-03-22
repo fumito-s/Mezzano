@@ -188,11 +188,10 @@
 (defun structure-object-class (object)
   "If OBJECT is a structure object, return the object's class. Otherwise return NIL."
   (when (sys.int::instance-p object)
+    ;; This isn't checking for obsoleteness because structs can never change-class,
+    ;; struct classes can only ever be obsoleted, so the class always stays the same.
     (let* ((layout (sys.int::%instance-layout object))
-           (class (sys.int::layout-class
-                   (if (sys.int::layout-p layout)
-                       layout
-                       (obsolete-instance-layout-old-layout layout)))))
+           (class (sys.int::layout-class layout)))
       (when (structure-class-p class)
         class))))
 

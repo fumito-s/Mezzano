@@ -323,12 +323,8 @@ FN will be called with the world stopped, it must not allocate."
                         (setf largest-free-space (max largest-free-space size)))
                        ((#.+object-tag-instance+
                          #.+object-tag-funcallable-instance+)
-                        (let ((layout (%instance-layout object)))
-                          (add-class
-                           (layout-class
-                            (if (layout-p layout)
-                                layout
-                                (mezzano.runtime::obsolete-instance-layout-old-layout layout)))))))))))
+                        (add-class
+                         (layout-class (%instance-layout object)))))))))
     (values allocated-words total-words largest-free-space
             n-allocated-objects allocated-objects-sizes allocated-classes)))
 
@@ -382,11 +378,7 @@ on floats or integers."
               (funcall fn object (%object-ref-t object i) i)))
            (#.+object-tag-instance+
             ;; Gets a bit hairy with gc link-snapping...
-            (let* ((direct-layout (%instance-layout object))
-                   (layout (if (layout-p direct-layout)
-                               direct-layout
-                               (mezzano.runtime::obsolete-instance-layout-old-layout
-                                direct-layout)))
+            (let* ((layout (%instance-layout object))
                    (heap-layout (layout-heap-layout layout)))
               (funcall fn object layout -1)
               (cond ((eql heap-layout 't)
@@ -406,11 +398,7 @@ on floats or integers."
                 (funcall fn object (%object-ref-t object (+ pool-base i)) (+ pool-base i)))))
            (#.+object-tag-funcallable-instance+
             ;; Gets a bit hairy with gc link-snapping...
-            (let* ((direct-layout (%instance-layout object))
-                   (layout (if (layout-p direct-layout)
-                               direct-layout
-                               (mezzano.runtime::obsolete-instance-layout-old-layout
-                                direct-layout)))
+            (let* ((layout (%instance-layout object))
                    (heap-layout (layout-heap-layout layout)))
               (funcall fn object layout -1)
               (funcall fn object (%object-ref-t fn +funcallable-instance-function+) +funcallable-instance-function+)
