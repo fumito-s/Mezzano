@@ -19,6 +19,29 @@
    (single-dispatch-emf-table-table emf-table)
    class))
 
+(defun single-dispatch-emf-entry-by-object (emf-table object)
+  (declare (optimize (speed 3) (safety 0) (debug 1))
+           (type single-dispatch-emf-table emf-table))
+  (let ((table (single-dispatch-emf-table-table emf-table)))
+    (if (sys.int::instance-or-funcallable-instance-p object)
+        (let* ((layout (sys.int::%instance-layout object))
+               (new-instance (sys.int::layout-new-instance layout)))
+          (declare (type sys.int::layout layout))
+          (if new-instance
+              (let ((layout (sys.int::%instance-layout new-instance)))
+                (declare (type sys.int::layout layout))
+                (fast-class-hash-table-entry-known-hash
+                 table
+                 (sys.int::layout-class layout)
+                 (sys.int::layout-hash layout)))
+              (fast-class-hash-table-entry-known-hash
+               table
+               (sys.int::layout-class layout)
+               (sys.int::layout-hash layout))))
+        (fast-class-hash-table-entry
+         table
+         (class-of object)))))
+
 (defun (setf single-dispatch-emf-entry) (value emf-table class)
   (mezzano.supervisor:with-mutex ((single-dispatch-emf-table-update-lock emf-table))
     (setf (fast-class-hash-table-entry

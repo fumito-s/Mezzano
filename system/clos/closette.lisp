@@ -1977,22 +1977,25 @@ has only has class specializer."
                                   (return ,(if rest-arg
                                                `(apply (cdr eql-emfun) ,@req-args ,rest-arg)
                                                `(funcall (cdr eql-emfun) ,@req-args))))))
-                          (let* ((class (class-of ,(nth index req-args)))
-                                 (emfun (single-dispatch-emf-entry emf-table class)))
+                          (let* ((emfun (single-dispatch-emf-entry-by-object
+                                         emf-table ,(nth index req-args))))
                             ;; Hack around a bug... The table gets corrupted somehow and returns an integer
                             (when (and emfun (not (functionp emfun)))
                               (setf emfun nil)
                               (clear-single-dispatch-emf-table emf-table))
                             (if emfun
-                                ,(if rest-arg
-                                     `(apply emfun ,@req-args ,rest-arg)
-                                     `(funcall emfun ,@req-args))
+                                (locally
+                                    (declare (optimize speed (safety 0))
+                                             (type function emfun))
+                                  ,(if rest-arg
+                                       `(apply emfun ,@req-args ,rest-arg)
+                                       `(funcall emfun ,@req-args)))
                                 (slow-single-dispatch-method-lookup
                                  gf
                                  ,(if rest-arg
                                       `(list* ,@req-args ,rest-arg)
                                       `(list ,@req-args))
-                                 class))))))))
+                                 (class-of ,(nth index req-args))))))))))
                (gen-all ()
                  `(or
                    ,@(loop
@@ -2011,11 +2014,10 @@ has only has class specializer."
                    (eql-emfun (assoc arg eql-table)))
               (if eql-emfun
                   (apply (cdr eql-emfun) args)
-                  (let* ((class (class-of arg))
-                         (emfun (single-dispatch-emf-entry emf-table class)))
+                  (let ((emfun (single-dispatch-emf-entry-by-object emf-table arg)))
                     (if emfun
                         (apply emfun args)
-                        (slow-single-dispatch-method-lookup gf args class))))))))))
+                        (slow-single-dispatch-method-lookup gf args (class-of arg)))))))))))
 
 (defun compute-n-effective-discriminator (gf emf-table n-required-args)
   (lambda (&rest args sys.int::&count arg-count)

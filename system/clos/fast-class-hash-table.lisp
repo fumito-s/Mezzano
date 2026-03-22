@@ -22,7 +22,7 @@
   (table nil)
   (count 0))
 
-(defun fast-class-hash-table-entry (table class)
+(defun fast-class-hash-table-entry-known-hash (table class hash)
   (declare (optimize speed (safety 0) (debug 1))
            (type fast-class-hash-table table))
   (let ((storage (fast-class-hash-table-table table)))
@@ -39,8 +39,7 @@
            (locally
                (declare (type simple-vector storage))
              ;; Full hash table.
-             (do* ((hash (safe-class-hash class))
-                   (size (length storage))
+             (do* ((size (length storage))
                    (mask (1- size))
                    ;; This hash implementation is inspired by the Python dict implementation.
                    (slot (logand hash #xFFFFFFFF)
@@ -63,6 +62,9 @@
                  (when (and (not (eq slot t))
                             (eq class (sys.int::%weak-pointer-key (the mezzano.extensions:weak-pointer slot))))
                    (return (sys.int::%weak-pointer-value (the mezzano.extensions:weak-pointer slot)))))))))))
+
+(defun fast-class-hash-table-entry (table class)
+  (fast-class-hash-table-entry-known-hash table class (safe-class-hash class)))
 
 (defun get-fast-class-hash-table-slot-offset (storage class)
   (do* ((hash (safe-class-hash class))
