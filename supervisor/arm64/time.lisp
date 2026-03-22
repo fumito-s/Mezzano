@@ -58,5 +58,8 @@
     (%isb)))
 
 (defun high-precision-time-units-to-internal-time-units (hp-time)
-  ;; TODO
-  hp-time)
+  (if (boundp '*generic-timer-rate*)
+      ;; Do this to avoid producing intermediate bignum or ratio results.
+      ;; This loses a bit of precision...
+      (truncate hp-time (truncate *generic-timer-rate* internal-time-units-per-second))
+      0))
