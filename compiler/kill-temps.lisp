@@ -73,13 +73,19 @@
     (values (ast `(call ,(name form) ,@new-list) form)
             did-replace)))
 
-(defun temporary-p (varlike)
+(defun temporary-p (varlike &optional context)
   (and (lexical-variable-p varlike)
        (eql (lexical-variable-use-count varlike) 1)
        (zerop (lexical-variable-write-count varlike))
        ;; Don't move D-X variables forwards, this runs the risk
        ;; of them losing their D-X nature and causing allocations.
-       (not (lexical-variable-dynamic-extent varlike))))
+       (or (not (lexical-variable-dynamic-extent varlike))
+           ;; Except if this is specifically a form like (%apply <fn> <the-var>),
+           ;; in which case it's fine.
+           (and context
+                (typep context 'ast-call)
+                (eql (ast-name context) 'mezzano.runtime::%apply)
+                (eql (second (ast-arguments context)) varlike)))))
 
 (defmethod kt-form ((form ast-block) &optional target-variable replacement-form)
   (multiple-value-bind (new-body did-replace)
@@ -139,7 +145,8 @@
            ;; Now push the last binding into the body.
            (multiple-value-bind (new-form replaced-last-binding)
                (let ((last-binding (car (last (bindings form)))))
-                 (if (temporary-p (first last-binding))
+                 (if (temporary-p (first last-binding) (body form)
+                                  )
                      (kt-form (body form)
                               (first last-binding)
                               (second last-binding))
