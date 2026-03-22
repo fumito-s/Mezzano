@@ -1917,8 +1917,7 @@ has only has class specializer."
 
 (defun compute-reader-discriminator (gf emf-table argument-offset slot-definition)
   (lambda (object)
-    (let* ((class (class-of object))
-           (location (single-dispatch-emf-entry emf-table class)))
+    (let* ((location (single-dispatch-emf-entry-by-object emf-table object)))
       (if location
           (fast-slot-read object location slot-definition)
           (slow-single-dispatch-method-lookup* gf argument-offset (list object) :reader)))))
@@ -1931,8 +1930,7 @@ has only has class specializer."
 
 (defun compute-writer-discriminator (gf emf-table argument-offset slot-definition)
   (lambda (new-value object)
-    (let* ((class (class-of object))
-           (location (single-dispatch-emf-entry emf-table class)))
+    (let* ((location (single-dispatch-emf-entry-by-object emf-table object)))
       (cond (location
              (let ((typecheck (writer-discriminator-entry-typecheck location)))
                (when (and typecheck (not (funcall typecheck new-value)))

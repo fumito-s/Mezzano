@@ -38,9 +38,17 @@
                table
                (sys.int::layout-class layout)
                (sys.int::layout-hash layout))))
-        (fast-class-hash-table-entry
-         table
-         (class-of object)))))
+        ;; If it's not an instance, then it must be a built-in class
+        (let* ((class (built-in-class-of object))
+               ;; This is effectively inlining safe-class-hash when we know
+               ;; class is a built-in-class.
+               (hash (sys.int::%object-ref-t
+                      class (mezzano.runtime::location-offset-t
+                             *built-in-class-hash-location*))))
+              (fast-class-hash-table-entry-known-hash
+               table
+               class
+               hash)))))
 
 (defun (setf single-dispatch-emf-entry) (value emf-table class)
   (mezzano.supervisor:with-mutex ((single-dispatch-emf-table-update-lock emf-table))
