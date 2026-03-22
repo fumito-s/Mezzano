@@ -213,10 +213,24 @@
         (- sys.int::+object-data-shift+))
    0))
 
-;; TODO: Ideally this would allocate the new layout in the pinned area if the
-;; object is non-wired.
+;; Even though LAYOUT has :allocation :wired, we want to avoid allocating individual
+;; layouts used by SUPERSEDE-INSTANCE in the wired area if we can avoid it.
 (defun copy-layout-with-appropriate-area (layout)
-  (mezzano.internals::copy-layout layout))
+  (let* ((layout-layout (sys.int::%instance-layout layout)) ; quick hack to get the layout of LAYOUT (the layout struct, not the argument)
+         (new-layout (%allocate-object sys.int::+object-tag-instance+
+                                       (sys.int::lisp-object-address layout-layout)
+                                       (sys.int::layout-heap-size layout-layout)
+                                       (if (eql (sys.int::layout-area layout) :wired)
+                                           :wired
+                                           :pinned))))
+    (setf (sys.int::%struct-slot new-layout 'sys.int::layout 'sys.int::class) (sys.int::layout-class layout))
+    (setf (sys.int::%struct-slot new-layout 'sys.int::layout 'sys.int::obsolete) (sys.int::layout-obsolete layout))
+    (setf (sys.int::%struct-slot new-layout 'sys.int::layout 'sys.int::heap-size) (sys.int::layout-heap-size layout))
+    (setf (sys.int::%struct-slot new-layout 'sys.int::layout 'sys.int::heap-layout) (sys.int::layout-heap-layout layout))
+    (setf (sys.int::%struct-slot new-layout 'sys.int::layout 'sys.int::area) (sys.int::layout-area layout))
+    (setf (sys.int::%struct-slot new-layout 'sys.int::layout 'sys.int::instance-slots) (sys.int::layout-instance-slots layout))
+    (setf (sys.int::%struct-slot new-layout 'sys.int::layout 'sys.int::new-instance) (sys.int::layout-new-instance layout))
+    new-layout))
 
 (defun supersede-instance (old-instance replacement)
   (let ((layout (sys.int::%instance-layout old-instance)))
@@ -263,12 +277,3 @@
   (area nil)
   (instance-slots nil)
   (new-instance nil))
-
-;; Fetch an object's real layout - that is, indirect through new-instance
-;; if it's present.
-(defun instance-real-layout (object)
-  (let* ((layout (%instance-layout object))
-         (new-instance (layout-new-instance layout)))
-    (if new-instance
-        (%instance-layout new-instance)
-        layout)))
