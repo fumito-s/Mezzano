@@ -24,7 +24,8 @@
 
 (defun fast-class-hash-table-entry-known-hash (table class hash)
   (declare (optimize speed (safety 0) (debug 1))
-           (type fast-class-hash-table table))
+           (type fast-class-hash-table table)
+           (type fixnum hash))
   (let ((storage (fast-class-hash-table-table table)))
     (cond ((mezzano.extensions:weak-pointer-p storage)
            ;; Single entry.
