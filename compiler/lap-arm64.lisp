@@ -1978,12 +1978,15 @@
 (define-cas-instruction caspal 1 1 #b01 :gpr-64 0)
 (define-cas-instruction caspl 0 1 #b01 :gpr-64 0)
 
-(defmacro define-atomic-op (name a r size opc class)
+(defmacro define-atomic-op (name a r size opc class &key allow-zr)
   `(define-instruction ,name (xs xt address)
      (destructuring-bind (base) address
        (check-register-class base :gpr-64 :sp)
        (check-register-class xs ,class)
-       (assert (eql (register-class xs) (register-class xt)))
+       ,(if allow-zr
+            `(assert (or (eql (register-class xs) (register-class xt))
+                         (eql (register-class xt) ,(ecase class (:gpr-64 :xzr) (:gpr-32 :wzr)))))
+            `(assert (eql (register-class xs) (register-class xt))))
        (emit-instruction (logior #x38200000
                                  ,(ash size 30)
                                  ,(ash a 23)
@@ -1994,7 +1997,7 @@
                                  (ash (register-number xs) +rs-shift+)))
        (return-from instruction t))))
 
-(defmacro define-atomic-ops (name opc)
+(defmacro define-atomic-ops (name opc &key allow-zr)
   (list*
    'progn
    (loop
@@ -2002,10 +2005,10 @@
                                      ("H" #b01 :gpr-32) ("B" #b00 :gpr-32))
      append (loop for (order-name a r) in '(("" 0 0) ("A" 1 0) ("L" 0 1) ("AL" 1 1))
                   for final-name = (intern (format nil "~A~A~A" name order-name size-name))
-                  collect `(define-atomic-op ,final-name ,a ,r ,size ,opc ,class)))))
+                  collect `(define-atomic-op ,final-name ,a ,r ,size ,opc ,class :allow-zr ,allow-zr)))))
 
 (define-atomic-ops swp #b1000)
-(define-atomic-ops ldadd #b000)
+(define-atomic-ops ldadd #b000 :allow-zr t)
 
 (define-instruction movi.v (type dst imm &optional (shift :lsl) (amount 0))
   (check-register-class dst :fp-128)
