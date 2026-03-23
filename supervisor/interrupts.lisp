@@ -84,9 +84,12 @@ RETURN-FROM/GO must not be used to leave this form."
   (multiple-value-bind (vars vals old-sym new-sym cas-form read-form write-form)
       (sys.int::get-cas-expansion place environment)
     (declare (ignore old-sym cas-form read-form))
-    `(let (,@(mapcar #'list vars vals)
-           (,new-sym :unlocked))
-       ,write-form
+    `(let* (,@(mapcar #'list vars vals)
+            (,new-sym :unlocked)
+            (,old-sym ,read-form))
+       ;; FIXME: This should use the write form but that doesn't have the proper
+       ;; release semantics yet on arm64.
+       ,cas-form
        (values))))
 
 (defmacro with-place-spinlock ((place) &body body)
