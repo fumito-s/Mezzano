@@ -355,14 +355,44 @@
   (dotimes (i count integer)
     (setf integer (+ integer integer))))
 
+(declaim (inline sys.int::memref-t-pair))
+(defun sys.int::memref-t-pair (base &optional (index 0))
+  (sys.int::%memref-t-pair base index))
+(defsetf sys.int::memref-t-pair (base &optional (index 0)) (v1 v2)
+  `(sys.int::%set-memref-t-pair ,v1 ,v2 ,base ,index))
+
 (defun sys.int::%copy-words (destination-address source-address count)
-  (dotimes (i count)
-    (setf (sys.int::memref-t destination-address i)
-          (sys.int::memref-t source-address i))))
+  (declare (type fixnum destination-address source-address count)
+           (optimize speed (safety 0) (debug 1)))
+  (when (plusp count)
+    (loop for i of-type fixnum below count by 2
+          do (multiple-value-bind (v1 v2)
+                 (sys.int::memref-t-pair source-address)
+               (setf (sys.int::memref-t-pair destination-address)
+                     (values v1 v2)))
+             (setf destination-address (the fixnum (+ destination-address 16)))
+             (setf source-address (the fixnum (+ source-address 16))))
+    (when (eq (the fixnum (logand count 1)) 1) ; copy last odd word
+      (setf (sys.int::memref-t destination-address 0)
+            (sys.int::memref-t source-address 0))))
+  (values))
 
 (defun sys.int::%fill-words (destination-address value count)
-  (dotimes (i count)
-    (setf (sys.int::memref-t destination-address i) value)))
+  (declare (type fixnum destination-address count)
+           (optimize speed (safety 0) (debug 1)))
+  (when (plusp count)
+    ;; align dest
+    (unless (eq (the fixnum (logand destination-address 8)) 0)
+      (setf (sys.int::memref-t destination-address) value)
+      (setf destination-address (the fixnum (+ destination-address 8)))
+      (decf count))
+    (loop for i of-type fixnum below count by 2
+          do (setf (sys.int::memref-t-pair destination-address)
+                   (values value value))
+             (setf destination-address (the fixnum (+ destination-address 16))))
+    (unless (eq (the fixnum (logand count 1)) 0) ; copy last odd word
+      (setf (sys.int::memref-t destination-address) value)))
+  (values))
 
 (sys.int::define-lap-function %allocate-from-general-area ((tag data words))
   (:gc :no-frame :layout #* :incoming-arguments :rcx)

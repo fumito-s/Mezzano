@@ -2,7 +2,7 @@
 
 (in-package :mezzano.compiler.backend.arm64)
 
-(defmacro with-memory-effective-address ((effective-address additional-inputs base-address index scale) &body body)
+(defmacro with-memory-effective-address ((effective-address additional-inputs base-address index scale &key ldp/stp-address) &body body)
   "Generate an effective address that deals properly with scaling and constant indices."
   (check-type scale (member 1 2 4 8))
   (let ((unboxed-address (gensym "UNBOXED-ADDRESS"))
@@ -17,9 +17,21 @@
                 ,@body))
              (t
               (with-scaled-fixnum-index (,scaled-index ,index ,scale)
-                (let ((,effective-address (list ,unboxed-address ,scaled-index))
-                      (,additional-inputs (list ,unboxed-address ,scaled-index)))
-                  ,@body)))))))
+                ,(if ldp/stp-address
+                     ;; Need to add the base & index together for ldp/stp.
+                     (let ((final-address (gensym "ADDRESS")))
+                       `(let ((,final-address (make-instance 'ir:virtual-register :kind :integer)))
+                          (emit (make-instance 'arm64-instruction
+                                               :opcode 'lap:add
+                                               :operands (list ,final-address ,unboxed-address ,scaled-index)
+                                               :inputs (list ,unboxed-address ,scaled-index)
+                                               :outputs (list ,final-address)))
+                          (let ((,effective-address (list ,final-address))
+                                (,additional-inputs (list ,final-address)))
+                            ,@body)))
+                     `(let ((,effective-address (list ,unboxed-address ,scaled-index))
+                            (,additional-inputs (list ,unboxed-address ,scaled-index)))
+                        ,@body))))))))
 
 (define-builtin sys.int::%memref-t ((address index) result)
   (with-memory-effective-address (ea ea-inputs address index 8)
@@ -39,6 +51,28 @@
   (emit (make-instance 'ir:move-instruction
                        :source value
                        :destination result)))
+
+(define-builtin sys.int::%memref-t-pair ((address index) (result-1 result-2))
+  (with-memory-effective-address (ea ea-inputs address index 8 :ldp/stp-address t)
+    (emit (make-instance 'arm64-instruction
+                         :opcode 'lap:ldp
+                         :operands (list result-1 result-2 ea)
+                         :inputs ea-inputs
+                         :outputs (list result-1 result-2)))))
+
+(define-builtin sys.int::%set-memref-t-pair ((value-1 value-2 address index) (result-1 result-2))
+  (with-memory-effective-address (ea ea-inputs address index 8 :ldp/stp-address t)
+    (emit (make-instance 'arm64-instruction
+                         :opcode 'lap:stp
+                         :operands (list value-1 value-2 ea)
+                         :inputs (list* value-1 value-2 ea-inputs)
+                         :outputs (list))))
+  (emit (make-instance 'ir:move-instruction
+                       :source value-1
+                       :destination result-1))
+  (emit (make-instance 'ir:move-instruction
+                       :source value-2
+                       :destination result-2)))
 
 ;; TODO: (cas memref-t) & dcas memref-t. the cmpxchg ir instructions currently only support object-relative accesses
 
