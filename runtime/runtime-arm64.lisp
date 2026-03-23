@@ -408,9 +408,10 @@
   ;; Update allocation meter.
   ;; *BYTES-CONSED* is updated elsewhere.
   (mezzano.lap.arm64:ldr :x6 (:symbol-global-cell *general-allocation-count*))
-  (mezzano.lap.arm64:add :x9 :x6 #.(+ (- 8 sys.int::+tag-object+) (* sys.int::+symbol-value-cell-value+ 8)))
-  (mezzano.lap.arm64:movz :x10 #.(ash 1 sys.int::+n-fixnum-bits+))
-  (mezzano.lap.arm64:ldaddl :x10 :xzr (:x9))
+  ;; FIXME: Should be atomic add.
+  (mezzano.lap.arm64:ldr :x9 (:object :x6 #.sys.int::+symbol-value-cell-value+))
+  (mezzano.lap.arm64:add :x9 :x9 #.(ash 1 sys.int::+n-fixnum-bits+))
+  (mezzano.lap.arm64:str :x9 (:object :x6 #.sys.int::+symbol-value-cell-value+))
   ;; Check *ENABLE-ALLOCATION-PROFILING*
   ;; FIXME: This only tests the global value.
   (mezzano.lap.arm64:ldr :x6 (:symbol-global-cell *enable-allocation-profiling*))
@@ -428,9 +429,10 @@
   (mezzano.lap.arm64:b.ne SLOW-PATH)
   ;; Done. Return everything.
   (mezzano.lap.arm64:ldr :x6 (:symbol-global-cell *general-fast-path-hits*))
-  (mezzano.lap.arm64:add :x9 :x6 #.(+ (- 8 sys.int::+tag-object+) (* sys.int::+symbol-value-cell-value+ 8)))
-  (mezzano.lap.arm64:movz :x10 #.(ash 1 sys.int::+n-fixnum-bits+))
-  (mezzano.lap.arm64:ldaddl :x10 :xzr (:x9))
+  ;; FIXME: Should be atomic add.
+  (mezzano.lap.arm64:ldr :x9 (:object :x6 #.sys.int::+symbol-value-cell-value+))
+  (mezzano.lap.arm64:add :x9 :x9 #.(ash 1 sys.int::+n-fixnum-bits+))
+  (mezzano.lap.arm64:str :x9 (:object :x6 #.sys.int::+symbol-value-cell-value+))
   (mezzano.lap.arm64:movz :x5 #.(ash 1 #.sys.int::+n-fixnum-bits+))
   (mezzano.lap.arm64:ldp :x29 :x30 (:post :sp 16))
   (:gc :no-frame :layout #*)
@@ -515,10 +517,10 @@
   (mezzano.lap.arm64:ldr :x3 (:symbol-global-cell sys.int::*cons-area-young-gen-limit*))
   ;; R13 = bump. R11 = limit. R12 = mark.
   (:gc :no-frame :layout #* :restart t)
+  ;; Fetch and increment the current bump pointer.
   ;; Address generation.
   ;; Linked GC mode is not needed as this will be repeated due to the restart region.
   (mezzano.lap.arm64:add :x9 :x7 #.(+ (- sys.int::+tag-object+) 8 (* sys.int::+symbol-value-cell-value+ 8)))
-  ;; Fetch and increment the current bump pointer.
   ;; Release atomic add to increment the bump pointer
   (mezzano.lap.arm64:movz :x10 #.(ash 16 #.sys.int::+n-fixnum-bits+)) ; 16, size of cons
   (mezzano.lap.arm64:ldaddl :x10 :x6 (:x9))
@@ -567,15 +569,15 @@
   (mezzano.lap.arm64:b.ne SLOW-PATH-BAD-ARGS)
   (:gc :no-frame :layout #*00)
   ;; Update allocation meter.
-  ;; NOTE: This assumes that value cells are non-moving (which is true, they're always wired)
+  ;; FIXME: Should be atomic add.
   (mezzano.lap.arm64:ldr :x6 (:symbol-global-cell *cons-allocation-count*))
-  (mezzano.lap.arm64:add :x9 :x6 #.(+ (- 8 sys.int::+tag-object+) (* sys.int::+symbol-value-cell-value+ 8)))
-  (mezzano.lap.arm64:movz :x10 #.(ash 1 sys.int::+n-fixnum-bits+))
-  (mezzano.lap.arm64:ldaddl :x10 :xzr (:x9))
+  (mezzano.lap.arm64:ldr :x9 (:object :x6 #.sys.int::+symbol-value-cell-value+))
+  (mezzano.lap.arm64:add :x9 :x9 #.(ash 1 sys.int::+n-fixnum-bits+))
+  (mezzano.lap.arm64:str :x9 (:object :x6 #.sys.int::+symbol-value-cell-value+))
   (mezzano.lap.arm64:ldr :x6 (:symbol-global-cell *bytes-consed*))
-  (mezzano.lap.arm64:add :x9 :x6 #.(+ (- 8 sys.int::+tag-object+) (* sys.int::+symbol-value-cell-value+ 8)))
-  (mezzano.lap.arm64:movz :x10 #.(ash 16 sys.int::+n-fixnum-bits+))
-  (mezzano.lap.arm64:ldaddl :x10 :xzr (:x9))
+  (mezzano.lap.arm64:ldr :x9 (:object :x6 #.sys.int::+symbol-value-cell-value+))
+  (mezzano.lap.arm64:add :x9 :x9 #.(ash 16 sys.int::+n-fixnum-bits+))
+  (mezzano.lap.arm64:str :x9 (:object :x6 #.sys.int::+symbol-value-cell-value+))
   ;; Check *ENABLE-ALLOCATION-PROFILING*
   ;; FIXME: This only tests the global value.
   #| Logging every cons tends to explode the profile buffer & exhaust memory.
@@ -595,9 +597,9 @@
   (mezzano.lap.arm64:b.ne SLOW-PATH)
   ;; Done. Return everything.
   (mezzano.lap.arm64:ldr :x6 (:symbol-global-cell *cons-fast-path-hits*))
-  (mezzano.lap.arm64:add :x9 :x6 #.(+ (- 8 sys.int::+tag-object+) (* sys.int::+symbol-value-cell-value+ 8)))
-  (mezzano.lap.arm64:movz :x10 #.(ash 1 sys.int::+n-fixnum-bits+))
-  (mezzano.lap.arm64:ldaddl :x10 :xzr (:x9))
+  (mezzano.lap.arm64:ldr :x9 (:object :x6 #.sys.int::+symbol-value-cell-value+))
+  (mezzano.lap.arm64:add :x9 :x9 #.(ash 1 sys.int::+n-fixnum-bits+))
+  (mezzano.lap.arm64:str :x9 (:object :x6 #.sys.int::+symbol-value-cell-value+))
   (mezzano.lap.arm64:movz :x5 #.(ash 1 #.sys.int::+n-fixnum-bits+))
   (mezzano.lap.arm64:ldp :x29 :x30 (:post :sp 16))
   (:gc :no-frame :layout #*)
