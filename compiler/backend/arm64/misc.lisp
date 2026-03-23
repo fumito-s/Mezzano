@@ -36,11 +36,38 @@
 (define-support-object sys.int::%layout-instance-header :layout-instance-header)
 
 (define-builtin eq ((x y) :eq)
-  (emit (make-instance 'arm64-instruction
-                       :opcode 'lap:subs
-                       :operands (list :xzr x y)
-                       :inputs (list x y)
-                       :outputs (list))))
+  (cond ((constant-value-p y '(eql 0))
+         (emit (make-instance 'arm64-instruction
+                              :opcode 'lap:subs
+                              :operands (list :xzr x :xzr)
+                              :inputs (list x)
+                              :outputs (list))))
+        ((constant-value-p x '(eql 0))
+         (emit (make-instance 'arm64-instruction
+                              :opcode 'lap:subs
+                              :operands (list :xzr y :xzr)
+                              :inputs (list y)
+                              :outputs (list))))
+        ((constant-value-p y '(unsigned-byte 11))
+         (emit (make-instance 'arm64-instruction
+                              :opcode 'lap:subs
+                              :operands (list :xzr x (ash (fetch-constant-value y)
+                                                          sys.int::+n-fixnum-bits+))
+                              :inputs (list x)
+                              :outputs (list))))
+        ((constant-value-p x '(unsigned-byte 11))
+         (emit (make-instance 'arm64-instruction
+                              :opcode 'lap:subs
+                              :operands (list :xzr y (ash (fetch-constant-value x)
+                                                          sys.int::+n-fixnum-bits+))
+                              :inputs (list y)
+                              :outputs (list))))
+        (t
+         (emit (make-instance 'arm64-instruction
+                              :opcode 'lap:subs
+                              :operands (list :xzr x y)
+                              :inputs (list x y)
+                              :outputs (list))))))
 
 (define-builtin mezzano.runtime::symbol-global-value-cell (((:constant symbol symbol))
                                                            result
