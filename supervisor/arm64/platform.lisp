@@ -52,6 +52,7 @@
   (initialize-cpu)
   (initialize-psci)
   (debug-print-line "Performing FDT scan")
+  (setf *pl031-rtc-base* nil)
   (arm64-fdt-scan nil))
 
 (defun arm64-fdt-scan (earlyp)
@@ -93,5 +94,8 @@
             ((fdt-compatible-p child "arm,psci-1.0")
              (when (not earlyp)
                (psci-register child)))
+            ((fdt-compatible-p child "arm,pl031")
+             (when (not earlyp)
+               (initialize-arm-rtc child address-cells size-cells)))
             (t
              (debug-print-line "unknown fdt node at " child " on simple-bus"))))))

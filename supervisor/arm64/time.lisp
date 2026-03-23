@@ -42,6 +42,28 @@
     (setf (%cntv-ctl-el0) 1)
     (%isb)))
 
+(sys.int::defglobal *pl031-rtc-base*)
+
+(defconstant +pl031-rtcdr+ #x00) ; Data register (RO)
+(defconstant +pl031-rtcmr+ #x04) ; Match register (RW)
+(defconstant +pl031-rtclr+ #x08) ; Load register (RW)
+(defconstant +pl031-rtccr+ #x0C) ; Control reigster (RW)
+(defconstant +pl031-rtcimsc+ #x10) ; Interrupt Mask Set or Clear register (RW)
+(defconstant +pl031-rtcris+ #x14) ; Raw Interrupt Status (RO)
+(defconstant +pl031-rtcmis+ #x18) ; Masked Interrupt Status (RO)
+(defconstant +pl031-rtcicr+ #x1C) ; Interrupt Clear Register (WO)
+
+(defconstant +pl031-conversion-value+ 2208988800)
+
+(defun pl031-reg (index)
+  (physical-memref-unsigned-byte-32 (+ *pl031-rtc-base* index)))
+
+(defun initialize-arm-rtc (fdt-node address-cells size-cells)
+  (let* ((reg (fdt-get-property fdt-node "reg"))
+         (address (fdt-read-integer reg address-cells 0)))
+    (setf *pl031-rtc-base* address)
+    (setf *rtc-adjust* (+ +pl031-conversion-value+ (pl031-reg +pl031-rtcdr+)))))
+
 (defun get-universal-time ()
   (+ *rtc-adjust* (truncate (%cntvct-el0) *generic-timer-rate*)))
 
